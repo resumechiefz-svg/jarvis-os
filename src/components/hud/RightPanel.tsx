@@ -1,50 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Agent } from '@/lib/types'
+import type { PhantomStats } from '@/lib/agents/phantom'
 
-const AGENT_COLORS: Record<string, string> = {
-  jarvis:  '#00d4ff',
-  nova:    '#a855f7',
-  sage:    '#00ff88',
-  vault:   '#c9a84c',
-  echo:    '#ff6b35',
-  scout:   '#ff4455',
-  reel:    '#ff69b4',
-  lister:  '#fbbf24',
-  dex:     '#60a5fa',
-  beacon:  '#34d399',
-  ledger:  '#f87171',
-  atlas:   '#e879f9',
+function DataRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div className="flex justify-between items-baseline py-[2px] border-b border-white/4">
+      <span className="text-[9px] text-white/40 tracking-wider uppercase">{label}</span>
+      <span className="text-[11px] font-mono" style={{ color: valueColor ?? '#cce8ff' }}>{value}</span>
+    </div>
+  )
 }
 
-// All 11 agents — all phases complete, all active
-const ALL_AGENTS: Agent[] = [
-  { name: 'jarvis',  displayName: 'JARVIS',  status: 'active', color: AGENT_COLORS.jarvis },
-  { name: 'nova',    displayName: 'NOVA',    status: 'active', color: AGENT_COLORS.nova },
-  { name: 'sage',    displayName: 'SAGE',    status: 'active', color: AGENT_COLORS.sage },
-  { name: 'vault',   displayName: 'VAULT',   status: 'active', color: AGENT_COLORS.vault },
-  { name: 'echo',    displayName: 'ECHO',    status: 'active', color: AGENT_COLORS.echo },
-  { name: 'scout',   displayName: 'SCOUT',   status: 'active', color: AGENT_COLORS.scout },
-  { name: 'reel',    displayName: 'REEL',    status: 'active', color: AGENT_COLORS.reel },
-  { name: 'lister',  displayName: 'LISTER',  status: 'active', color: AGENT_COLORS.lister },
-  { name: 'dex',     displayName: 'DEX',     status: 'active', color: AGENT_COLORS.dex },
-  { name: 'beacon',  displayName: 'BEACON',  status: 'active', color: AGENT_COLORS.beacon },
-  { name: 'ledger',  displayName: 'LEDGER',  status: 'active', color: AGENT_COLORS.ledger },
-  { name: 'atlas',   displayName: 'ATLAS',   status: 'active', color: AGENT_COLORS.atlas },
-]
-
-const PHASES = [
-  { label: 'Phase 1 — Foundation',    complete: true  },
-  { label: 'Phase 2 — Automation',    complete: true  },
-  { label: 'Phase 3 — Intelligence',  complete: true  },
-  { label: 'Phase 4 — Expansion',     complete: true  },
-]
-
-function AgentStatusDot({ status, color }: { status: Agent['status']; color: string }) {
-  if (status === 'working') return <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: color }} />
-  if (status === 'active')  return <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: color, boxShadow: `0 0 5px ${color}` }} />
-  return <span className="w-2 h-2 rounded-full bg-white/10" />
+function SectionHead({ title, badge }: { title: string; badge?: string }) {
+  return (
+    <div className="flex items-center justify-between text-[8px] tracking-widest uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1">
+      <span className="text-cyan-500/50">{title}</span>
+      {badge && <span className="text-[7px] font-normal" style={{ color: badge.includes('LIVE') ? '#00ff88' : '#c9a84c' }}>{badge}</span>}
+    </div>
+  )
 }
 
 interface Props {
@@ -55,6 +29,7 @@ interface Props {
 export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
+  const [phantom, setPhantom] = useState<PhantomStats | null>(null)
 
   useEffect(() => {
     function tick() {
@@ -67,99 +42,90 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
     return () => clearInterval(t)
   }, [])
 
-  // Dynamic roadmap based on real MRR
-  const roadmap = [
-    { label: '$1K MRR',       done: mrr >= 1000,  current: mrr > 0 && mrr < 1000 },
-    { label: '$5K MRR',       done: mrr >= 5000,  current: mrr >= 1000 && mrr < 5000 },
-    { label: '$10K MRR',      done: mrr >= 10000, current: mrr >= 5000 && mrr < 10000 },
-    { label: '$50K Net Worth', done: false,         current: false },
-    { label: 'FI by 40',      done: false,         current: false },
-  ]
+  useEffect(() => {
+    const load = () => fetch('/api/kalshi').then(r => r.json()).then(d => d?.lastUpdated ? setPhantom(d) : null).catch(() => {})
+    load()
+    const t = setInterval(load, 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  const pnlColor = (v: number) => v > 0 ? '#00ff88' : v < 0 ? '#ff4455' : '#cce8ff'
+  const winColor = (v: number) => v >= 65 ? '#00ff88' : v >= 50 ? '#c9a84c' : '#ff4455'
 
   return (
-    <div className="right-panel h-full overflow-y-auto px-3 py-3">
-      {/* Live clock */}
-      <div className="mb-4 text-right">
-        <div className="text-[26px] font-mono text-cyan-300 leading-none tracking-wider">{time || '——:——:——'}</div>
-        <div className="text-[10px] text-cyan-500/60 tracking-widest uppercase mt-0.5">{date}</div>
+    <div className="right-panel h-full overflow-y-auto px-3 py-2">
+      {/* Clock */}
+      <div className="text-right mb-3">
+        <div className="text-[24px] font-mono text-cyan-300 leading-none tracking-wider">{time || '——:——:——'}</div>
+        <div className="text-[9px] text-cyan-500/50 tracking-widest uppercase mt-0.5">{date}</div>
       </div>
 
-      {/* Agent Status — all 11 */}
-      <div className="mb-4">
-        <div className="text-[9px] tracking-widest text-cyan-500/50 mb-2 uppercase font-bold border-b border-cyan-900/40 pb-1">
-          Agent Status <span className="text-green-400/60 ml-1">12 ONLINE</span>
-        </div>
-        <div className="space-y-[4px]">
-          {ALL_AGENTS.map(agent => (
-            <div key={agent.name} className="flex items-center gap-2">
-              <AgentStatusDot
-                status={agent.name === activeAgent ? 'working' : agent.status}
-                color={agent.color}
-              />
-              <span className="text-[10px] font-mono tracking-wider" style={{ color: agent.color }}>
-                {agent.displayName}
-              </span>
-              <span className="text-[8px] text-white/20 ml-auto font-mono">
-                {agent.name === activeAgent ? 'WORKING' : 'ACTIVE'}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* System Phase — all complete */}
-      <div className="mb-4">
-        <div className="text-[9px] tracking-widest text-cyan-500/50 mb-2 uppercase font-bold border-b border-cyan-900/40 pb-1">
-          System Phase
-        </div>
-        <div className="space-y-1">
-          {PHASES.map(p => (
-            <div key={p.label} className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ boxShadow: '0 0 4px #00ff88' }} />
-              <span className="text-[10px] text-green-400/80">{p.label}</span>
-              <span className="text-[8px] text-green-600/50 ml-auto">✓</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 7-Figure Roadmap — live */}
+      {/* Kalshi Phantom */}
       <div className="mb-3">
-        <div className="text-[9px] tracking-widest text-cyan-500/50 mb-2 uppercase font-bold border-b border-cyan-900/40 pb-1">
-          7-Figure Roadmap
-        </div>
-        <div className="space-y-1.5">
-          {roadmap.map(m => (
-            <div key={m.label} className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-sm flex-shrink-0 ${
-                m.done ? 'bg-green-400' : m.current ? 'bg-cyan-400 animate-pulse' : 'border border-white/15'
-              }`} />
-              <span className={`text-[10px] ${
-                m.done ? 'text-green-400' : m.current ? 'text-cyan-300' : 'text-white/25'
-              }`}>
-                {m.label}
-              </span>
-              {m.current && <span className="text-[8px] text-cyan-600 ml-auto">NOW</span>}
-              {m.done && <span className="text-[8px] text-green-600 ml-auto">✓</span>}
-            </div>
-          ))}
-        </div>
+        <SectionHead title="Phantom" badge={phantom?.mode === 'live' ? '● LIVE' : '● PAPER'} />
+        {phantom ? (
+          <>
+            <DataRow label="Balance" value={`$${phantom.balance.toFixed(2)}`} />
+            <DataRow
+              label="Total P&L"
+              value={`${phantom.totalPnl >= 0 ? '+' : ''}$${phantom.totalPnl.toFixed(2)}`}
+              valueColor={pnlColor(phantom.totalPnl)}
+            />
+            <DataRow label="Win Rate" value={`${phantom.winRate}%`} valueColor={winColor(phantom.winRate)} />
+            <DataRow label="W / L" value={`${phantom.wins} / ${phantom.losses}`} />
+            <DataRow label="Total Orders" value={String(phantom.totalOrders)} />
+            <DataRow label="Invested" value={`$${phantom.invested.toFixed(2)}`} />
+            <DataRow label="Open Pos." value={String(phantom.openPositions.length)} />
+            {/* Open positions detail */}
+            {phantom.openPositions.slice(0, 3).map((p, i) => (
+              <div key={i} className="flex items-center gap-1 py-[2px] border-b border-white/4">
+                <span className="text-[7px] font-mono text-white/30 truncate flex-1">{p.ticker.split('-').slice(0, 2).join('-')}</span>
+                <span className="text-[8px] font-bold shrink-0" style={{ color: p.side === 'yes' ? '#00ff88' : '#ff4455' }}>
+                  {p.side.toUpperCase()}
+                </span>
+                <span className="text-[8px] font-mono text-white/50 shrink-0">{p.count}</span>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="text-[9px] text-cyan-700">Connecting...</div>
+        )}
+      </div>
 
-        {/* Progress bar */}
-        <div className="mt-3">
-          <div className="flex justify-between text-[8px] text-white/20 mb-1">
-            <span>RC MRR</span>
-            <span>${mrr.toFixed(0)} / $10,000</span>
+      {/* Alpaca Portfolio */}
+      <div className="mb-3">
+        <SectionHead title="Alpaca" badge="PAPER" />
+        <DataRow label="Portfolio" value="—" />
+        <DataRow label="Day P&L" value="—" />
+        <DataRow label="Equity" value="—" />
+        <div className="text-[8px] text-white/15 mt-0.5">Go live to unlock real data</div>
+      </div>
+
+      {/* RC MRR Progress */}
+      <div className="mb-3">
+        <SectionHead title="RC Revenue" badge="STRIPE" />
+        <DataRow label="MRR" value={`$${mrr.toFixed(0)}`} valueColor={mrr > 0 ? '#00ff88' : '#cce8ff'} />
+        <DataRow label="ARR" value={`$${(mrr * 12).toFixed(0)}`} />
+        <DataRow label="Valuation" value={mrr > 0 ? `$${(mrr * 36).toFixed(0)}` : '—'} valueColor="#a855f7" />
+        <div className="mt-1.5">
+          <div className="flex justify-between text-[7px] text-white/20 mb-0.5">
+            <span>MRR Target</span><span>${mrr.toFixed(0)} / $10,000</span>
           </div>
-          <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-1000"
-              style={{
-                width: `${Math.min(100, (mrr / 10000) * 100)}%`,
-                background: 'linear-gradient(90deg, #00d4ff, #00ff88)',
-              }}
+              className="h-full rounded-full"
+              style={{ width: `${Math.min(100, (mrr / 10000) * 100)}%`, background: 'linear-gradient(90deg, #a855f7, #00d4ff)' }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Active Agent */}
+      <div className="mb-3">
+        <SectionHead title="Active Agent" />
+        <div className="text-[18px] font-bold tracking-[0.3em] text-center py-2"
+          style={{ color: '#00d4ff', textShadow: '0 0 20px #00d4ff60' }}>
+          {activeAgent.toUpperCase()}
         </div>
       </div>
     </div>

@@ -2,47 +2,30 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import AgentBar from '@/components/hud/AgentBar'
 import NewsTicker from '@/components/hud/NewsTicker'
 import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
-import TelemetryLog from '@/components/hud/TelemetryLog'
+import GoalOne from '@/components/hud/GoalOne'
 import CommandInterface from '@/components/hud/CommandInterface'
 import PushToggle from '@/components/hud/PushToggle'
-import type { Message, TelemetryEntry, AgentName } from '@/lib/types'
+import type { Message, AgentName } from '@/lib/types'
 
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
 
 const AGENT_COLORS: Record<string, string> = {
-  jarvis: '#00d4ff',
-  nova: '#a855f7',
-  sage: '#00ff88',
-  vault: '#c9a84c',
-}
-
-const BOOT_LINES = [
-  { agent: 'jarvis' as AgentName, action: 'Initializing AB Command Center...' },
-  { agent: 'jarvis' as AgentName, action: 'Loading agent roster...' },
-  { agent: 'nova' as AgentName, action: 'ResumeChiefz data pipeline connected.' },
-  { agent: 'sage' as AgentName, action: 'LifeOS engines online.' },
-  { agent: 'vault' as AgentName, action: 'Card Chiefz feed active.' },
-  { agent: 'jarvis' as AgentName, action: 'All Phase 1 agents online. Standing by.' },
-  { agent: 'jarvis' as AgentName, action: 'Type a command or click "Morning Brief" to begin.' },
-]
-
-function makeTelemetry(agent: AgentName, action: string, detail?: string): TelemetryEntry {
-  return { id: Date.now().toString() + Math.random(), timestamp: new Date(), agent, action, detail }
+  jarvis: '#00d4ff', nova: '#a855f7', sage: '#00ff88', vault: '#c9a84c',
+  echo: '#ff6b35', scout: '#ff4455', reel: '#ff69b4', lister: '#fbbf24',
+  dex: '#60a5fa', beacon: '#34d399', ledger: '#f87171', atlas: '#e879f9',
 }
 
 export default function HUD() {
   const [messages, setMessages] = useState<Message[]>([])
-  const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [orbActive, setOrbActive] = useState(false)
   const [orbAmplitude, setOrbAmplitude] = useState(0)
-  const [bootLine, setBootLine] = useState(0)
   const [booting, setBooting] = useState(true)
   const [mrr, setMrr] = useState(0)
-  const [, setTick] = useState(0)
   const amplitudeRef = useRef(0)
 
   const handleAmplitude = useCallback((val: number) => {
@@ -50,103 +33,69 @@ export default function HUD() {
     setOrbAmplitude(val)
   }, [])
 
-  // Load MRR for roadmap
   useEffect(() => {
-    fetch('/api/nova').then(r => r.json()).then(d => { if (d?.mrr) setMrr(d.mrr) }).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (bootLine < BOOT_LINES.length) {
-      const timer = setTimeout(() => {
-        const line = BOOT_LINES[bootLine]
-        setTelemetry(prev => [...prev.slice(-49), makeTelemetry(line.agent, line.action)])
-        setBootLine(b => b + 1)
-      }, 350 + Math.random() * 250)
-      return () => clearTimeout(timer)
-    } else {
-      setBooting(false)
-    }
-  }, [bootLine])
-
-  useEffect(() => {
-    const t = setInterval(() => setTick(x => x + 1), 1000)
-    return () => clearInterval(t)
+    fetch('/api/nova').then(r => r.json()).then(d => { if (d?.mrr !== undefined) setMrr(d.mrr) }).catch(() => {})
+    const timer = setTimeout(() => setBooting(false), 2500)
+    return () => clearTimeout(timer)
   }, [])
 
   const handleMessage = useCallback((msg: Message) => {
     setMessages(prev => [...prev, msg])
-    if (msg.role === 'user') {
-      setOrbActive(true)
-      setTelemetry(prev => [...prev.slice(-49), makeTelemetry('jarvis', 'Received command', msg.content.slice(0, 50))])
-    } else {
-      setOrbActive(false)
-      setTelemetry(prev => [...prev.slice(-49), makeTelemetry(msg.agent, 'Response delivered', `${msg.content.length} chars`)])
-    }
+    if (msg.role === 'user') setOrbActive(true)
+    else setOrbActive(false)
   }, [])
 
   const handleAgentChange = useCallback((agent: AgentName) => {
     setActiveAgent(agent)
-    if (agent !== 'jarvis') {
-      setTelemetry(prev => [...prev.slice(-49), makeTelemetry(agent, 'Agent activated', 'Processing')])
-    }
   }, [])
 
   const agentColor = AGENT_COLORS[activeAgent] ?? '#00d4ff'
 
   return (
     <div className="hud-root">
-      <NewsTicker />
+      {/* Row 1: Agent status bar (replaces old news ticker at top) */}
+      <AgentBar activeAgent={activeAgent} />
 
+      {/* Row 2 Left: Live data panels */}
       <LeftPanel />
 
+      {/* Row 2 Center: Orb + Goal */}
       <div className="center-panel">
-        {/* Primary objective */}
-        <div className="w-full text-center mb-1">
-          <div className="text-[8px] tracking-[0.3em] text-cyan-500/30 uppercase">Primary Objective</div>
-          <div className="text-[10px] tracking-widest mt-0.5 font-bold" style={{ color: agentColor }}>
+        {/* Objective */}
+        <div className="w-full text-center">
+          <div className="text-[7px] tracking-[0.3em] text-cyan-500/30 uppercase">Primary Objective</div>
+          <div className="text-[9px] tracking-widest mt-0.5 font-bold" style={{ color: agentColor }}>
             7-FIGURE PORTFOLIO — FINANCIAL INDEPENDENCE BY 40
           </div>
         </div>
 
         {/* Orb */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <JarvisOrb active={orbActive} agentColor={agentColor} amplitude={orbAmplitude} />
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-            <div className="text-[11px] font-bold tracking-[0.4em] uppercase" style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}>
+            <div
+              className="text-[10px] font-bold tracking-[0.4em] uppercase"
+              style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}
+            >
               {activeAgent.toUpperCase()}
             </div>
-            <div className="text-[8px] tracking-widest text-white/30 mt-0.5">
+            <div className="text-[7px] tracking-widest text-white/25 mt-0.5">
               {orbActive ? 'PROCESSING' : booting ? 'BOOTING' : 'STANDBY'}
             </div>
           </div>
         </div>
 
-        {/* Live system stats */}
-        <div className="flex gap-6 text-center">
-          {[
-            { label: 'AGENTS',  value: '12',   color: agentColor },
-            { label: 'PHASES',  value: '4/4',  color: '#00ff88' },
-            { label: 'STATUS',  value: 'LIVE', color: '#00ff88' },
-          ].map(s => (
-            <div key={s.label}>
-              <div className="text-[20px] font-mono leading-none" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-[8px] tracking-widest text-white/25 uppercase mt-0.5">{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Active agent label */}
-        <div className="w-full text-center mt-1">
-          <div className="text-[8px] tracking-widest text-white/20 uppercase">
-            {booting ? 'Initializing system...' : `Active Agent — ${activeAgent.toUpperCase()}`}
-          </div>
-        </div>
+        {/* Goal 1 — directly under the orb */}
+        <GoalOne mrr={mrr} />
       </div>
 
+      {/* Row 2 Right: Kalshi + financials */}
       <RightPanel activeAgent={activeAgent} mrr={mrr} />
 
-      <TelemetryLog entries={telemetry} />
+      {/* Row 3: News ticker (moved from top) */}
+      <NewsTicker />
 
+      {/* Row 4: Command interface */}
       <CommandInterface
         messages={messages}
         onMessage={handleMessage}
@@ -154,18 +103,22 @@ export default function HUD() {
         onAmplitude={handleAmplitude}
       />
 
+      {/* Row 5: Footer */}
       <div className="hud-footer flex items-center justify-between px-4">
-        <span className="text-[9px] tracking-[0.2em] text-cyan-950 uppercase">
-          JARVIS OS v2.0 — AB COMMAND CENTER — &quot;WE DO NOT PLAY GAMES HERE&quot;
+        <span className="text-[8px] tracking-[0.2em] text-cyan-950 uppercase">
+          JARVIS OS v2.0 — &quot;WE DO NOT PLAY GAMES HERE ON AB&apos;S TEAM&quot;
         </span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <PushToggle />
-          <a href="/workspace" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Workspace →</a>
-          <a href="/ideas" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Ideas →</a>
-          <a href="/acquisition" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Acquisition →</a>
-          <a href="/health" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Health →</a>
-          {['NOVA', 'SAGE', 'VAULT', 'JARVIS'].map(a => (
-            <span key={a} className="text-[9px] text-cyan-950">● {a}</span>
+          {[
+            { label: 'Workspace', href: '/workspace' },
+            { label: 'Ideas', href: '/ideas' },
+            { label: 'Acquisition', href: '/acquisition' },
+            { label: 'Health', href: '/health' },
+          ].map(l => (
+            <a key={l.href} href={l.href} className="text-[8px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">
+              {l.label} →
+            </a>
           ))}
         </div>
       </div>

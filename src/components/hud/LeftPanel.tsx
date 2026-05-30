@@ -2,28 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import type { StockQuote, NovaStats, VaultStats, SageBrief } from '@/lib/types'
-import type { PhantomStats } from '@/lib/agents/phantom'
 
-function DataRow({ label, value, sub, valueColor }: { label: string; value: string; sub?: string; valueColor?: string }) {
+function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="flex justify-between items-baseline py-[3px] border-b border-white/5">
-      <span className="text-[10px] text-cyan-400/60 tracking-wider uppercase">{label}</span>
-      <div className="text-right">
-        <span className="text-[12px] font-mono" style={{ color: valueColor ?? '#cce8ff' }}>{value}</span>
-        {sub && <span className="text-[9px] text-cyan-500/60 ml-1">{sub}</span>}
-      </div>
+    <div className="border border-white/5 px-2 py-1.5 bg-white/[0.01]">
+      <div className="text-[8px] text-white/30 tracking-wider uppercase mb-0.5">{label}</div>
+      <div className="text-[13px] font-mono font-bold leading-none" style={{ color: color ?? '#cce8ff' }}>{value}</div>
+      {sub && <div className="text-[8px] text-white/20 mt-0.5">{sub}</div>}
     </div>
   )
 }
 
-function Section({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
+function SectionHead({ title, badge }: { title: string; badge?: string }) {
   return (
-    <div className="mb-3">
-      <div className="text-[9px] tracking-widest text-cyan-500/50 mb-1 uppercase font-bold border-b border-cyan-900/40 pb-1 flex items-center justify-between">
-        <span>{title}</span>
-        {badge && <span className="text-[8px] text-green-500/60 font-normal">{badge}</span>}
-      </div>
-      {children}
+    <div className="col-span-2 flex items-center justify-between text-[8px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1.5">
+      <span className="text-cyan-500/50">{title}</span>
+      {badge && <span className="text-[7px] text-green-500/50 font-normal">{badge}</span>}
     </div>
   )
 }
@@ -33,111 +27,76 @@ export default function LeftPanel() {
   const [nova, setNova] = useState<NovaStats | null>(null)
   const [vault, setVault] = useState<VaultStats | null>(null)
   const [sage, setSage] = useState<SageBrief | null>(null)
-  const [phantom, setPhantom] = useState<PhantomStats | null>(null)
 
   useEffect(() => {
-    const load = () => {
+    const loadFast = () => {
       fetch('/api/stocks').then(r => r.json()).then(d => Array.isArray(d) ? setStocks(d) : null).catch(() => {})
-      fetch('/api/nova').then(r => r.json()).then(d => d?.mrr !== undefined ? setNova(d) : null).catch(() => {})
-      fetch('/api/vault').then(r => r.json()).then(d => d?.weeklyRevenue !== undefined ? setVault(d) : null).catch(() => {})
-      fetch('/api/sage').then(r => r.json()).then(d => d?.greeting ? setSage(d) : null).catch(() => {})
-      fetch('/api/kalshi').then(r => r.json()).then(d => d?.lastUpdated ? setPhantom(d) : null).catch(() => {})
     }
-    load()
-    // Stocks + Kalshi refresh every 60s, business data every 15 min
-    const fastInterval = setInterval(() => {
-      fetch('/api/stocks').then(r => r.json()).then(d => Array.isArray(d) ? setStocks(d) : null).catch(() => {})
-      fetch('/api/kalshi').then(r => r.json()).then(d => d?.lastUpdated ? setPhantom(d) : null).catch(() => {})
-    }, 60 * 1000)
-    const slowInterval = setInterval(() => {
+    const loadSlow = () => {
       fetch('/api/nova').then(r => r.json()).then(d => d?.mrr !== undefined ? setNova(d) : null).catch(() => {})
       fetch('/api/vault').then(r => r.json()).then(d => d?.weeklyRevenue !== undefined ? setVault(d) : null).catch(() => {})
       fetch('/api/sage').then(r => r.json()).then(d => d?.greeting ? setSage(d) : null).catch(() => {})
-    }, 15 * 60 * 1000)
-    return () => { clearInterval(fastInterval); clearInterval(slowInterval) }
+    }
+    loadFast(); loadSlow()
+    const fast = setInterval(loadFast, 60000)
+    const slow = setInterval(loadSlow, 15 * 60 * 1000)
+    return () => { clearInterval(fast); clearInterval(slow) }
   }, [])
 
-  const pnlColor = (v: number) => v > 0 ? '#00ff88' : v < 0 ? '#ff4455' : '#cce8ff'
-  const changeColor = (v: number) => v >= 0 ? '#00ff88' : '#ff4455'
+  const up = '#00ff88', dn = '#ff4455', nu = '#cce8ff', gold = '#c9a84c'
+  const chg = (v: number) => v >= 0 ? up : dn
 
   return (
-    <div className="left-panel h-full overflow-y-auto px-3 py-3 text-xs">
+    <div className="left-panel h-full overflow-hidden px-2 py-2">
+      <div className="grid grid-cols-2 gap-1 h-full content-start">
 
-      {/* Markets — Alpaca live */}
-      <Section title="Markets" badge="ALPACA LIVE">
-        {stocks.length === 0 ? (
-          <div className="text-cyan-600/50 text-[10px]">Connecting to Alpaca...</div>
-        ) : (
-          stocks.map(s => (
-            <DataRow
-              key={s.symbol}
-              label={s.symbol}
-              value={`$${s.price.toFixed(2)}`}
-              sub={`${s.change >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`}
-              valueColor={changeColor(s.change)}
-            />
-          ))
+        {/* Markets */}
+        <SectionHead title="Markets" badge="ALPACA LIVE" />
+        {stocks.slice(0, 4).map(s => (
+          <Cell
+            key={s.symbol}
+            label={s.symbol}
+            value={`$${s.price.toFixed(2)}`}
+            sub={`${s.change >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`}
+            color={chg(s.change)}
+          />
+        ))}
+
+        {/* ResumeChiefz */}
+        <SectionHead title="ResumeChiefz" badge="STRIPE LIVE" />
+        <Cell label="MRR" value={nova ? `$${nova.mrr.toFixed(0)}` : '—'} color={nova?.mrr ? up : nu} />
+        <Cell label="Users" value={nova ? String(nova.activeUsers) : '—'} />
+        <Cell label="New Subs" value={nova ? String(nova.newSubs) : '—'} sub="30 days" color={nova?.newSubs ? up : nu} />
+        <Cell label="Churn" value={nova ? String(nova.churn) : '—'} sub="30 days" color={nova?.churn ? dn : nu} />
+        <Cell label="Resumes" value={nova ? String(nova.resumesGenerated) : '—'} sub="30 days" />
+        <Cell label="Conversion" value={nova && nova.activeUsers > 0 ? `${((nova.newSubs / Math.max(nova.activeUsers, 1)) * 100).toFixed(1)}%` : '—'} />
+
+        {/* Card Chiefz */}
+        <SectionHead title="Card Chiefz" badge="EBAY" />
+        <Cell label="Wkly Rev" value={vault ? `$${vault.weeklyRevenue.toFixed(0)}` : '—'} color={vault?.weeklyRevenue ? gold : nu} />
+        <Cell label="Mo Sales" value={vault ? String(vault.monthlySales) : '—'} />
+        <Cell label="Feedback" value={vault ? `${vault.feedbackScore}%` : '—'} color={up} />
+        <Cell label="All Sales" value={vault ? `${vault.totalSales}+` : '—'} />
+
+        {/* Beckett */}
+        <SectionHead title="Beckett" />
+        <Cell
+          label="This Week"
+          value={sage ? (sage.beckettWeek ? '✓ YES' : '— NO') : '—'}
+          color={sage?.beckettWeek ? up : nu}
+        />
+        <Cell label="Next Switch" value={sage?.nextCustodyDate ?? '—'} />
+        <Cell label="Life Mode" value={sage?.lifeMode?.toUpperCase() ?? '—'} color={sage?.beckettWeek ? up : gold} />
+        {sage?.bills?.[0] && (
+          <Cell
+            label={`Bill: ${sage.bills[0].name}`}
+            value={`$${sage.bills[0].amount}`}
+            sub={sage.bills[0].dueDate}
+            color={sage.bills[0].overdue ? dn : nu}
+          />
         )}
-      </Section>
 
-      {/* ResumeChiefz — Stripe + Supabase */}
-      <Section title="ResumeChiefz" badge="STRIPE LIVE">
-        <DataRow label="MRR" value={nova ? `$${nova.mrr.toFixed(0)}` : '—'} valueColor={nova?.mrr ? '#00ff88' : undefined} />
-        <DataRow label="New Subs" value={nova ? String(nova.newSubs) : '—'} sub="30d" />
-        <DataRow label="Churn" value={nova ? String(nova.churn) : '—'} sub="30d" valueColor={nova?.churn ? '#ff4455' : undefined} />
-        <DataRow label="Users" value={nova ? String(nova.activeUsers) : '—'} />
-        <DataRow label="Resumes" value={nova ? String(nova.resumesGenerated) : '—'} sub="30d" />
-      </Section>
-
-      {/* Card Chiefz — eBay */}
-      <Section title="Card Chiefz" badge="EBAY LIVE">
-        <DataRow label="Wkly Rev" value={vault ? `$${vault.weeklyRevenue.toFixed(0)}` : '—'} valueColor={vault?.weeklyRevenue ? '#c9a84c' : undefined} />
-        <DataRow label="Mo Sales" value={vault ? String(vault.monthlySales) : '—'} />
-        <DataRow label="Feedback" value={vault ? `${vault.feedbackScore}%` : '—'} valueColor="#00ff88" />
-        <DataRow label="Total" value={vault ? `${vault.totalSales}+` : '—'} />
-      </Section>
-
-      {/* Phantom — Kalshi trading */}
-      <Section title="Phantom" badge={phantom?.mode === 'live' ? '● LIVE' : '● PAPER'}>
-        {phantom ? (
-          <>
-            <DataRow label="Balance" value={`$${phantom.balance.toFixed(2)}`} />
-            <DataRow
-              label="P&L"
-              value={`${phantom.totalPnl >= 0 ? '+' : ''}$${phantom.totalPnl.toFixed(2)}`}
-              valueColor={pnlColor(phantom.totalPnl)}
-            />
-            <DataRow label="Win Rate" value={`${phantom.winRate}%`} valueColor={phantom.winRate >= 60 ? '#00ff88' : '#c9a84c'} />
-            <DataRow label="W/L" value={`${phantom.wins} / ${phantom.losses}`} />
-            <DataRow label="Orders" value={String(phantom.totalOrders)} />
-            <DataRow label="Open Pos" value={String(phantom.openPositions.length)} />
-          </>
-        ) : (
-          <div className="text-cyan-600/50 text-[10px]">Connecting to Kalshi...</div>
-        )}
-      </Section>
-
-      {/* Beckett */}
-      <Section title="Beckett">
-        {sage ? (
-          <>
-            <DataRow label="This Week" value={sage.beckettWeek ? '✓ YES' : '— NO'} valueColor={sage.beckettWeek ? '#00ff88' : '#ffffff50'} />
-            <DataRow label="Next Switch" value={sage.nextCustodyDate} />
-            <DataRow label="Mode" value={sage.lifeMode.toUpperCase()} valueColor={sage.beckettWeek ? '#00ff88' : '#c9a84c'} />
-          </>
-        ) : (
-          <div className="text-cyan-600/50 text-[10px]">Loading...</div>
-        )}
-      </Section>
-
-      {/* Upcoming Bills */}
-      {sage?.bills && sage.bills.length > 0 && (
-        <Section title="Bills Due">
-          {sage.bills.slice(0, 3).map((b, i) => (
-            <DataRow key={i} label={b.name} value={`$${b.amount}`} sub={b.dueDate} valueColor={b.overdue ? '#ff4455' : undefined} />
-          ))}
-        </Section>
-      )}
+      </div>
     </div>
   )
 }
