@@ -9,6 +9,7 @@ import { JARVIS_SYSTEM } from './prompts'
 import { getNovaStats } from './nova'
 import { getVaultStats } from './vault'
 import { getPhantomStats } from './phantom'
+import { runConversionCheck } from './conversion'
 import { supabaseAdmin } from '../supabase/client'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -323,6 +324,9 @@ export async function runMonitor(): Promise<{ alerts: number; critical: number }
     monitorGoals(),
     monitorBeckett(),
   ])
+
+  // RC Day-3 conversion check — runs every cycle, skips if no new users
+  runConversionCheck().catch(console.error)
 
   const allAlerts = [...rcAlerts, ...ccAlerts, ...kalshiAlerts, ...goalAlerts, ...beckettAlerts]
   const criticals = allAlerts.filter(a => a.level === 'critical')
