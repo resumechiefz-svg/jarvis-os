@@ -12,8 +12,10 @@ async function send(to: string, subject: string, html: string): Promise<boolean>
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Anthony at ResumeChiefz <anthony@resumechiefz.com>',
-      reply_to: 'anthony@resumechiefz.com',
+      // Use verified Resend domain until resumechiefz.com is verified at resend.com/domains
+      // Reply-to ensures replies go to Anthony directly
+      from: 'Anthony at ResumeChiefz <onboarding@resend.dev>',
+      reply_to: 'resumechiefz@gmail.com',
       to: [to],
       subject,
       html,
