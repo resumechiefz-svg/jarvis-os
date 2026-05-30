@@ -27,6 +27,8 @@ const QUICK_COMMANDS = [
   { label: 'Money', command: 'Ledger, give me my financial snapshot' },
   { label: 'Strategy', command: 'Atlas, where am I on the 7-figure roadmap?' },
   { label: 'End of Day', command: 'Jarvis, let\'s debrief' },
+  { label: 'New Ideas', command: 'Atlas, give me 3 business ideas I should build next' },
+  { label: 'RC Acquisition', command: 'Atlas, how close is ResumeChiefz to being acquisition-ready?' },
 ]
 
 // ElevenLabs voice with real-time amplitude analysis

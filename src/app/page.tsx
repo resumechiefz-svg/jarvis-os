@@ -147,9 +147,10 @@ export default function HUD() {
         </span>
         <div className="flex items-center gap-4">
           <PushToggle />
-          <a href="/workspace" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">
-            Workspace →
-          </a>
+          <a href="/workspace" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Workspace →</a>
+          <a href="/ideas" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Ideas →</a>
+          <a href="/acquisition" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Acquisition →</a>
+          <a href="/health" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">Health →</a>
           {['NOVA', 'SAGE', 'VAULT', 'JARVIS'].map(a => (
             <span key={a} className="text-[9px] text-cyan-950">● {a}</span>
           ))}
