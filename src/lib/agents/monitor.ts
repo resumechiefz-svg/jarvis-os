@@ -11,6 +11,7 @@ import { getVaultStats } from './vault'
 import { getPhantomStats } from './phantom'
 import { runConversionCheck } from './conversion'
 import { runSiteMonitor } from './dex'
+import { runTradeSignalScan } from './trade-signal'
 import { supabaseAdmin } from '../supabase/client'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -331,6 +332,9 @@ export async function runMonitor(): Promise<{ alerts: number; critical: number }
 
   // DEX site monitor — checks resumechiefz.com, cardchiefz.com, Jarvis OS
   runSiteMonitor().catch(console.error)
+
+  // Trade signal scan — market hours only, posts proposals to #tradepilot Slack
+  runTradeSignalScan().catch(console.error)
 
   const allAlerts = [...rcAlerts, ...ccAlerts, ...kalshiAlerts, ...goalAlerts, ...beckettAlerts]
   const criticals = allAlerts.filter(a => a.level === 'critical')
