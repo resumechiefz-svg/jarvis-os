@@ -1,26 +1,109 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #020810;
+  --cyan: #00d4ff;
+  --gold: #c9a84c;
+  --green: #00ff88;
+  --red: #ff4455;
+  --purple: #a855f7;
+  --orange: #ff6b35;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: white;
+  font-family: 'Courier New', 'SF Mono', Consolas, monospace;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 212, 255, 0.015) 2px,
+    rgba(0, 212, 255, 0.015) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
 }
+
+/* HUD Layout */
+.hud-root {
+  display: grid;
+  grid-template-rows: 28px 1fr 36px 220px 48px;
+  grid-template-columns: 220px 1fr 220px;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg);
+  gap: 0;
+}
+
+.ticker-bar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: 28px;
+}
+
+.left-panel {
+  grid-column: 1;
+  grid-row: 2;
+  border-right: 1px solid rgba(0, 212, 255, 0.08);
+  background: rgba(0, 8, 20, 0.8);
+}
+
+.center-panel {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.right-panel {
+  grid-column: 3;
+  grid-row: 2;
+  border-left: 1px solid rgba(0, 212, 255, 0.08);
+  background: rgba(0, 8, 20, 0.8);
+}
+
+.telemetry-log {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  border-top: 1px solid rgba(0, 212, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.08);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.command-interface {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  border-top: 1px solid rgba(0, 212, 255, 0.15);
+  background: rgba(0, 5, 15, 0.95);
+}
+
+.hud-footer {
+  grid-column: 1 / -1;
+  grid-row: 5;
+  border-top: 1px solid rgba(0, 212, 255, 0.06);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.2); }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }

@@ -1,65 +1,147 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
+import NewsTicker from '@/components/hud/NewsTicker'
+import LeftPanel from '@/components/hud/LeftPanel'
+import RightPanel from '@/components/hud/RightPanel'
+import TelemetryLog from '@/components/hud/TelemetryLog'
+import CommandInterface from '@/components/hud/CommandInterface'
+import type { Message, TelemetryEntry, AgentName } from '@/lib/types'
+
+const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
+
+const AGENT_COLORS: Record<string, string> = {
+  jarvis: '#00d4ff',
+  nova: '#a855f7',
+  sage: '#00ff88',
+  vault: '#c9a84c',
+}
+
+const BOOT_LINES = [
+  { agent: 'jarvis' as AgentName, action: 'Initializing AB Command Center...' },
+  { agent: 'jarvis' as AgentName, action: 'Loading agent roster...' },
+  { agent: 'nova' as AgentName, action: 'ResumeChiefz data pipeline connected.' },
+  { agent: 'sage' as AgentName, action: 'LifeOS engines online.' },
+  { agent: 'vault' as AgentName, action: 'Card Chiefz feed active.' },
+  { agent: 'jarvis' as AgentName, action: 'All Phase 1 agents online. Standing by.' },
+  { agent: 'jarvis' as AgentName, action: 'Type a command or click "Morning Brief" to begin.' },
+]
+
+function makeTelemetry(agent: AgentName, action: string, detail?: string): TelemetryEntry {
+  return { id: Date.now().toString() + Math.random(), timestamp: new Date(), agent, action, detail }
+}
+
+export default function HUD() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([])
+  const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
+  const [orbActive, setOrbActive] = useState(false)
+  const [bootLine, setBootLine] = useState(0)
+  const [booting, setBooting] = useState(true)
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    if (bootLine < BOOT_LINES.length) {
+      const timer = setTimeout(() => {
+        const line = BOOT_LINES[bootLine]
+        setTelemetry(prev => [...prev.slice(-49), makeTelemetry(line.agent, line.action)])
+        setBootLine(b => b + 1)
+      }, 350 + Math.random() * 250)
+      return () => clearTimeout(timer)
+    } else {
+      setBooting(false)
+    }
+  }, [bootLine])
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const handleMessage = useCallback((msg: Message) => {
+    setMessages(prev => [...prev, msg])
+    if (msg.role === 'user') {
+      setOrbActive(true)
+      setTelemetry(prev => [...prev.slice(-49), makeTelemetry('jarvis', 'Received command', msg.content.slice(0, 50))])
+    } else {
+      setOrbActive(false)
+      setTelemetry(prev => [...prev.slice(-49), makeTelemetry(msg.agent, 'Response delivered', `${msg.content.length} chars`)])
+    }
+  }, [])
+
+  const handleAgentChange = useCallback((agent: AgentName) => {
+    setActiveAgent(agent)
+    if (agent !== 'jarvis') {
+      setTelemetry(prev => [...prev.slice(-49), makeTelemetry(agent, 'Agent activated', 'Processing')])
+    }
+  }, [])
+
+  const agentColor = AGENT_COLORS[activeAgent] ?? '#00d4ff'
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="hud-root">
+      <NewsTicker />
+
+      <LeftPanel />
+
+      <div className="center-panel">
+        <div className="w-full text-center mb-1">
+          <div className="text-[9px] tracking-[0.3em] text-cyan-500/40 uppercase">Primary Objective</div>
+          <div className="text-[10px] tracking-widest mt-0.5" style={{ color: agentColor }}>
+            7-FIGURE PORTFOLIO — FINANCIAL INDEPENDENCE BY 40
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="relative">
+          <JarvisOrb active={orbActive} agentColor={agentColor} />
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+            <div
+              className="text-[11px] font-bold tracking-[0.4em] uppercase"
+              style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}
+            >
+              {activeAgent.toUpperCase()}
+            </div>
+            <div className="text-[8px] tracking-widest text-white/30 mt-0.5">
+              {orbActive ? 'PROCESSING' : booting ? 'BOOTING' : 'STANDBY'}
+            </div>
+          </div>
         </div>
-      </main>
+
+        <div className="flex gap-8 text-center">
+          {[
+            { label: 'AGENTS', value: '4' },
+            { label: 'PHASE', value: '1' },
+            { label: 'STATUS', value: 'LIVE' },
+          ].map(s => (
+            <div key={s.label}>
+              <div className="text-[22px] font-mono leading-none" style={{ color: agentColor }}>{s.value}</div>
+              <div className="text-[8px] tracking-widest text-white/30 uppercase mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <RightPanel telemetry={telemetry} activeAgent={activeAgent} />
+
+      <TelemetryLog entries={telemetry} />
+
+      <CommandInterface
+        messages={messages}
+        onMessage={handleMessage}
+        onAgentChange={handleAgentChange}
+      />
+
+      <div className="hud-footer flex items-center justify-between px-4">
+        <span className="text-[9px] tracking-[0.2em] text-cyan-950 uppercase">
+          JARVIS OS v1.0 — AB COMMAND CENTER — &quot;WE DO NOT PLAY GAMES HERE&quot;
+        </span>
+        <div className="flex items-center gap-4">
+          {['NOVA', 'SAGE', 'VAULT', 'JARVIS'].map(a => (
+            <span key={a} className="text-[9px] text-cyan-950">● {a}</span>
+          ))}
+        </div>
+      </div>
     </div>
-  );
+  )
 }
