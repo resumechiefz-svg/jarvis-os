@@ -6,177 +6,160 @@ import type { AgentName, JarvisResponse, Memory } from '../types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function getMemories(): Promise<Memory[]> {
-  const { data } = await supabaseAdmin
-    .from('ai_memories')
-    .select('*')
-    .order('importance', { ascending: false })
-    .limit(20)
-  return data ?? []
+// ── In-memory context cache — refreshes every 5 minutes ──────────────────────
+// Eliminates 3 sequential Supabase calls on every message
+interface ContextCache {
+  context: string
+  loadedAt: number
+}
+let contextCache: ContextCache | null = null
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function getCachedContext(): Promise<string> {
+  const now = Date.now()
+  if (contextCache && now - contextCache.loadedAt < CACHE_TTL) {
+    return contextCache.context
+  }
+
+  // Load all context in parallel
+  const [memories, richMemory, convHistory] = await Promise.all([
+    supabaseAdmin.from('ai_memories').select('category, content, importance').order('importance', { ascending: false }).limit(15).then(r => r.data ?? []),
+    loadRichMemory().catch(() => ''),
+    supabaseAdmin.from('ai_memories').select('content, context, created_at').eq('category', 'conversation_summary').gte('created_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()).order('created_at', { ascending: false }).limit(8).then(r => r.data ?? []),
+  ])
+
+  const memCtx = memories.length > 0
+    ? `\nMemory:\n${memories.map((m: { category: string; content: string; importance: number }) => `[${m.category}] ${m.content}`).join('\n')}`
+    : ''
+
+  const convCtx = convHistory.length > 0
+    ? `\n\nRecent conversations:\n${(convHistory as Array<{ content: string; context: string; created_at: string }>).map(d => `[${new Date(d.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}] AB: ${d.content}\nJarvis: ${d.context ?? ''}`).join('\n\n')}`
+    : ''
+
+  const context = memCtx + richMemory + convCtx
+  contextCache = { context, loadedAt: now }
+  return context
 }
 
-// Pull last 7 days of conversation summaries for persistent memory
-async function getConversationHistory(): Promise<string> {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const { data } = await supabaseAdmin
-    .from('ai_memories')
-    .select('content, context, created_at')
-    .eq('category', 'conversation_summary')
-    .gte('created_at', since)
-    .order('created_at', { ascending: false })
-    .limit(14)
-
-  if (!data?.length) return ''
-
-  return '\n\n--- RECENT CONVERSATIONS (last 7 days) ---\n' +
-    data.map(d => {
-      const date = new Date(d.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      return `[${date}] AB: ${d.content}\nJarvis: ${d.context ?? '(responded)'}`
-    }).join('\n\n') +
-    '\n--- END RECENT CONVERSATIONS ---\n'
-}
-
-// Save a conversation summary after each exchange
-async function saveConversationSummary(userMessage: string, jarvisReply: string): Promise<void> {
-  // Only save substantive exchanges (not one-word commands)
-  if (userMessage.length < 20) return
-
-  // Save summary — keep short to not bloat context
-  const summary = userMessage.slice(0, 200)
-  const replySnippet = jarvisReply.slice(0, 300)
-
-  void supabaseAdmin.from('ai_memories').insert({
-    category: 'conversation_summary',
-    content: summary,
-    context: replySnippet,
-    importance: 6,
-    created_at: new Date().toISOString(),
-  })
-}
-
-async function saveMemory(content: string, category: string, context?: string): Promise<void> {
-  await supabaseAdmin.from('ai_memories').insert({
-    category,
-    content,
-    context,
-    importance: 5,
-    created_at: new Date().toISOString(),
-  })
+// Force-refresh cache (called after saving new memories)
+export function invalidateContextCache() {
+  contextCache = null
 }
 
 function detectRoute(message: string): AgentName {
   const lower = message.toLowerCase()
-  if (lower.includes('stripe') || lower.includes('mrr') || lower.includes('subscriber') || lower.includes('nova') || lower.includes('rc metric') || lower.includes('conversion') || lower.includes('resumechiefz revenue')) return 'nova'
-  if (lower.includes('beckett') || lower.includes('custody') || lower.includes('grocery') || lower.includes('charlotte') || lower.includes('bill') || lower.includes('sage') || lower.includes('morning brief') || lower.includes('my week')) return 'sage'
-  if (lower.includes('ebay') || lower.includes('card chiefz') || lower.includes('vault') || lower.includes('card sale') || lower.includes('card revenue')) return 'vault'
-  if (lower.includes('content') || lower.includes('blog') || lower.includes('social') || lower.includes('echo') || lower.includes('resumechiefz post') || lower.includes('linkedin') || lower.includes('rc content')) return 'echo'
-  if (lower.includes('reel') || lower.includes('cc content') || lower.includes('card chiefz post') || lower.includes('card chiefz social')) return 'reel'
-  if (lower.includes('reddit') || lower.includes('scout') || lower.includes('product hunt') || lower.includes('growth') || lower.includes('seo gap')) return 'scout'
-  if (lower.includes('list') || lower.includes('lister') || lower.includes('ebay listing') || lower.includes('format this card')) return 'lister'
-  if (lower.includes('bug') || lower.includes('error') || lower.includes('dex') || lower.includes('deploy') || lower.includes('broken') || lower.includes('fix')) return 'dex'
-  if (lower.includes('goal') || lower.includes('beacon') || lower.includes('accountability') || lower.includes('on track') || lower.includes('milestone')) return 'beacon'
-  if (lower.includes('money') || lower.includes('ledger') || lower.includes('net worth') || lower.includes('budget') || lower.includes('savings') || lower.includes('cash')) return 'ledger'
-  if (lower.includes('strategy') || lower.includes('atlas') || lower.includes('market') || lower.includes('roadmap') || lower.includes('100x') || lower.includes('next big') || lower.includes('business idea')) return 'atlas'
+  if (lower.includes('stripe') || lower.includes('mrr') || lower.includes('subscriber') || lower.includes('nova') || lower.includes('resumechiefz revenue') || lower.includes('conversion')) return 'nova'
+  if (lower.includes('beckett') || lower.includes('custody') || lower.includes('grocery') || lower.includes('bill') || lower.includes('sage') || lower.includes('morning brief') || lower.includes('my week')) return 'sage'
+  if (lower.includes('ebay') || lower.includes('card') || lower.includes('vault') || lower.includes('listing') || lower.includes('card chiefz')) return 'vault'
+  if (lower.includes('post') || lower.includes('content') || lower.includes('linkedin') || lower.includes('echo') || lower.includes('blog') || lower.includes('social')) return 'echo'
+  if (lower.includes('reel') || lower.includes('card chiefz content') || lower.includes('cc post')) return 'reel'
+  if (lower.includes('reddit') || lower.includes('scout') || lower.includes('growth') || lower.includes('traffic') || lower.includes('seo')) return 'scout'
+  if (lower.includes('list') || lower.includes('format listing') || lower.includes('lister')) return 'lister'
+  if (lower.includes('bug') || lower.includes('error') || lower.includes('dex') || lower.includes('system') || lower.includes('site down')) return 'dex'
+  if (lower.includes('goal') || lower.includes('beacon') || lower.includes('accountability') || lower.includes('progress')) return 'beacon'
+  if (lower.includes('finances') || lower.includes('ledger') || lower.includes('money') || lower.includes('savings') || lower.includes('bills overview')) return 'ledger'
+  if (lower.includes('strategy') || lower.includes('atlas') || lower.includes('market intel') || lower.includes('business idea') || lower.includes('acquisition')) return 'atlas'
   return 'jarvis'
 }
 
-async function callAgent(agent: AgentName, userMessage: string, systemPrompt: string, context: string): Promise<string> {
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: systemPrompt + '\n\n' + context,
-    messages: [{ role: 'user', content: userMessage }],
-  })
-  return response.content[0].type === 'text' ? response.content[0].text : ''
+const AGENT_SYSTEMS: Record<string, string> = {
+  nova: NOVA_SYSTEM, sage: SAGE_SYSTEM, vault: VAULT_SYSTEM,
+  echo: ECHO_SYSTEM, reel: REEL_SYSTEM, scout: SCOUT_SYSTEM, lister: LISTER_SYSTEM,
+  dex: DEX_SYSTEM, beacon: BEACON_SYSTEM, ledger: LEDGER_SYSTEM, atlas: ATLAS_SYSTEM,
+}
+
+// Fast route: simple conversational messages use Haiku (< 300ms typical)
+// Complex analysis routes use Sonnet
+function needsSonnet(message: string, route: AgentName): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('analyze') || lower.includes('strategy') || lower.includes('brief') ||
+    lower.includes('what should') || lower.includes('recommend') || lower.includes('plan') ||
+    lower.includes('explain') || lower.includes('market') || lower.includes('portfolio') ||
+    route !== 'jarvis' || message.length > 100
+  )
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
-  const [memories, richMemory, conversationHistory] = await Promise.all([
-    getMemories(),
-    loadRichMemory(),
-    getConversationHistory(),
+  const [context, route] = await Promise.all([
+    getCachedContext(),
+    Promise.resolve(detectRoute(userMessage)),
   ])
-  const memoryContext = memories.length > 0
-    ? `\n\nPermanent memory:\n${memories.map(m => `[${m.category}] ${m.content}`).join('\n')}`
-    : ''
-  const fullContext = memoryContext + richMemory + conversationHistory
 
-  // Gather agent intel in the background — Jarvis always synthesizes and speaks
-  const route = detectRoute(userMessage)
+  const usesSonnet = needsSonnet(userMessage, route)
+  const model = usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
+
   let agentIntel = ''
   let telemetryAgent: AgentName = 'jarvis'
 
-  const agentSystemMap: Record<string, string> = {
-    nova: NOVA_SYSTEM, sage: SAGE_SYSTEM, vault: VAULT_SYSTEM,
-    echo: ECHO_SYSTEM, reel: REEL_SYSTEM, scout: SCOUT_SYSTEM, lister: LISTER_SYSTEM,
-    dex: DEX_SYSTEM, beacon: BEACON_SYSTEM, ledger: LEDGER_SYSTEM, atlas: ATLAS_SYSTEM,
+  // Only call sub-agents for relevant complex queries
+  if (route !== 'jarvis' && AGENT_SYSTEMS[route] && usesSonnet) {
+    const intel = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', // Always Haiku for sub-agents
+      max_tokens: 600,
+      system: AGENT_SYSTEMS[route] + context,
+      messages: [{ role: 'user', content: userMessage }],
+    }).then(r => r.content[0].type === 'text' ? r.content[0].text : '').catch(() => '')
+
+    agentIntel = intel ? `\n\n[${route.toUpperCase()} INTEL]\n${intel}` : ''
+    telemetryAgent = route
   }
 
-  if (route !== 'jarvis' && agentSystemMap[route]) {
-    const intel = await callAgent(route as AgentName, userMessage, agentSystemMap[route], fullContext)
-    agentIntel = `\n\n[${route.toUpperCase()} INTELLIGENCE]\n${intel}`
-    telemetryAgent = route as AgentName
-  }
-
-  // Jarvis always delivers the final response
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    ...history.slice(-6),
-    { role: 'user', content: userMessage },
-  ]
-
-  const systemPrompt = JARVIS_SYSTEM + fullContext + agentIntel +
-    (agentIntel ? `\n\nDeliver the above intelligence as JARVIS — synthesized, crisp, and in your voice. Do not say "Nova says" or "Sage says". Just deliver the brief as if it's yours. Call AB "sir" or "AB".` : '')
+  const systemPrompt = JARVIS_SYSTEM + context + agentIntel +
+    (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1500,
+    model,
+    max_tokens: usesSonnet ? 1200 : 400,
     system: systemPrompt,
-    messages,
+    messages: [...history.slice(-4), { role: 'user', content: userMessage }],
   })
 
   const reply = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Save conversation to persistent memory so Jarvis remembers across sessions
-  saveConversationSummary(userMessage, reply)
+  // Save conversation async — don't block response
+  if (userMessage.length > 20) {
+    void supabaseAdmin.from('ai_memories').insert({
+      category: 'conversation_summary',
+      content: userMessage.slice(0, 200),
+      context: reply.slice(0, 300),
+      importance: 6,
+      created_at: new Date().toISOString(),
+    })
+  }
 
-  return { agent: 'jarvis', message: reply }
+  return { agent: telemetryAgent, message: reply }
 }
 
 export async function morningBrief(): Promise<JarvisResponse> {
-  const memories = await getMemories()
-  const memCtx = memories.map(m => `[${m.category}] ${m.content}`).join('\n')
-
+  const context = await getCachedContext()
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
-  // Pull intel from Sage and Nova in parallel
   const [sageIntel, novaIntel] = await Promise.all([
-    callAgent('sage', `Morning brief for ${today}. What does AB need to know about his personal life, Beckett, and bills today?`, SAGE_SYSTEM, memCtx ? `Memory:\n${memCtx}` : ''),
-    callAgent('nova', `Quick RC metrics summary for the morning brief.`, NOVA_SYSTEM, ''),
+    anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      system: SAGE_SYSTEM + context,
+      messages: [{ role: 'user', content: `Morning brief for ${today}. AB's personal situation, Beckett, bills today.` }],
+    }).then(r => r.content[0].type === 'text' ? r.content[0].text : '').catch(() => ''),
+    anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      system: NOVA_SYSTEM,
+      messages: [{ role: 'user', content: 'Quick RC metrics summary.' }],
+    }).then(r => r.content[0].type === 'text' ? r.content[0].text : '').catch(() => ''),
   ])
-
-  const prompt = `Give AB his morning brief for ${today}. Use the intel below from your agents.
-
-[SAGE INTEL]
-${sageIntel}
-
-[NOVA INTEL]
-${novaIntel}
-
-Deliver as JARVIS — your voice, your synthesis. Format:
-1. Business metrics (RC + CC)
-2. Personal (Beckett, bills, priorities)
-3. Top 3 priorities for today
-4. One strategic recommendation
-
-Crisp. No fluff. Call him AB.`
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1000,
-    system: JARVIS_SYSTEM + (memCtx ? `\n\nMemory:\n${memCtx}` : ''),
-    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 1200,
+    system: JARVIS_SYSTEM + context,
+    messages: [{
+      role: 'user',
+      content: `Give AB his morning brief for ${today}.\n\n[SAGE]\n${sageIntel}\n\n[NOVA]\n${novaIntel}\n\nBe crisp. Open with the most important thing. Call him AB.`,
+    }],
   })
 
-  const reply = response.content[0].type === 'text' ? response.content[0].text : ''
-  return { agent: 'jarvis', message: reply }
+  const message = response.content[0].type === 'text' ? response.content[0].text : ''
+  return { agent: 'jarvis', message }
 }
