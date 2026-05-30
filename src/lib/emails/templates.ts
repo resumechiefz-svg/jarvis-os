@@ -281,3 +281,148 @@ export function passwordResetEmail(resetUrl: string): { subject: string; html: s
     `)
   }
 }
+
+// ── 6. Weekly tip / newsletter ─────────────────────────────────────────────────
+export function weeklyTipEmail(tip: { headline: string; body: string; insight: string; ctaText: string }): { subject: string; html: string } {
+  return {
+    subject: tip.headline,
+    html: BASE(`
+      <div style="width:40px; height:3px; background:#c9a84c; margin-bottom:28px; border-radius:2px;"></div>
+
+      <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.18em; color:#c9a84c; margin-bottom:16px;">This week from ResumeChiefz</p>
+
+      <h1 class="headline" style="font-size:28px; font-weight:800; color:#ffffff; line-height:1.25; letter-spacing:-.4px; margin-bottom:20px;">
+        ${tip.headline}
+      </h1>
+
+      <p style="font-size:15px; color:#8a9bb0; line-height:1.8; margin-bottom:28px;">${tip.body}</p>
+
+      <!-- Recruiter insight -->
+      <div style="background:rgba(201,168,76,0.06); border-left:3px solid #c9a84c; padding:20px 24px; margin:0 0 32px; border-radius:0 8px 8px 0;">
+        <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#c9a84c; margin-bottom:10px;">From the recruiting desk</p>
+        <p style="font-size:14px; color:#c8d4e4; line-height:1.75;">${tip.insight}</p>
+      </div>
+
+      <a href="https://resumechiefz.com/app.html" style="display:inline-block; background:#c9a84c; color:#0a1628; font-size:14px; font-weight:700; padding:14px 28px; border-radius:8px; text-decoration:none;">
+        ${tip.ctaText} →
+      </a>
+
+      <div style="margin-top:36px;">
+        <p style="font-size:14px; color:#8a9bb0; margin-bottom:4px;">— Anthony</p>
+        <p style="font-size:12px; color:#3a4d66;">Founder, ResumeChiefz</p>
+      </div>
+    `)
+  }
+}
+
+// ── 7. Feature update / product news ──────────────────────────────────────────
+export function featureUpdateEmail(update: { feature: string; headline: string; description: string; howToUse: string[] }): { subject: string; html: string } {
+  return {
+    subject: `New in ResumeChiefz: ${update.feature}`,
+    html: BASE(`
+      <div style="width:40px; height:3px; background:#c9a84c; margin-bottom:28px; border-radius:2px;"></div>
+
+      <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.18em; color:#c9a84c; margin-bottom:16px;">Product update</p>
+
+      <h1 class="headline" style="font-size:28px; font-weight:800; color:#ffffff; line-height:1.25; letter-spacing:-.4px; margin-bottom:20px;">
+        ${update.headline}
+      </h1>
+
+      <p style="font-size:15px; color:#8a9bb0; line-height:1.8; margin-bottom:32px;">${update.description}</p>
+
+      <!-- How to use -->
+      <div style="margin-bottom:32px;">
+        <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.15em; color:#c9a84c; margin-bottom:16px;">How to use it</p>
+        ${update.howToUse.map((step, i) => `
+          <div style="display:flex; gap:16px; margin-bottom:16px; align-items:flex-start;">
+            <div style="width:22px; height:22px; border-radius:50%; background:rgba(201,168,76,0.15); border:1px solid rgba(201,168,76,0.3); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:11px; font-weight:700; color:#c9a84c; text-align:center; line-height:22px;">
+              ${i + 1}
+            </div>
+            <p style="font-size:14px; color:#c8d4e4; line-height:1.6; margin-top:2px;">${step}</p>
+          </div>
+        `).join('')}
+      </div>
+
+      <a href="https://resumechiefz.com/app.html" style="display:inline-block; background:#c9a84c; color:#0a1628; font-size:14px; font-weight:700; padding:14px 28px; border-radius:8px; text-decoration:none;">
+        Try it now →
+      </a>
+
+      <div style="margin-top:36px;">
+        <p style="font-size:14px; color:#8a9bb0; margin-bottom:4px;">— Anthony</p>
+        <p style="font-size:12px; color:#3a4d66;">Founder, ResumeChiefz</p>
+      </div>
+    `)
+  }
+}
+
+// ── 8. Market news / job market update ────────────────────────────────────────
+export function marketNewsEmail(news: { headline: string; context: string; whatItMeans: string; tip: string }): { subject: string; html: string } {
+  return {
+    subject: news.headline,
+    html: BASE(`
+      <div style="width:40px; height:3px; background:#c9a84c; margin-bottom:28px; border-radius:2px;"></div>
+
+      <p style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.18em; color:#c9a84c; margin-bottom:16px;">Job market update</p>
+
+      <h1 class="headline" style="font-size:28px; font-weight:800; color:#ffffff; line-height:1.25; letter-spacing:-.4px; margin-bottom:20px;">
+        ${news.headline}
+      </h1>
+
+      <p style="font-size:15px; color:#8a9bb0; line-height:1.8; margin-bottom:28px;">${news.context}</p>
+
+      <!-- What it means -->
+      <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:24px; margin-bottom:28px;">
+        <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#3a4d66; margin-bottom:12px;">What this means for your job search</p>
+        <p style="font-size:14px; color:#c8d4e4; line-height:1.75;">${news.whatItMeans}</p>
+      </div>
+
+      <!-- Recruiter tip -->
+      <div style="background:rgba(201,168,76,0.06); border-left:3px solid #c9a84c; padding:20px 24px; margin-bottom:32px; border-radius:0 8px 8px 0;">
+        <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#c9a84c; margin-bottom:10px;">Recruiter's take</p>
+        <p style="font-size:14px; color:#c8d4e4; line-height:1.75;">${news.tip}</p>
+      </div>
+
+      <a href="https://resumechiefz.com/app.html" style="display:inline-block; background:#c9a84c; color:#0a1628; font-size:14px; font-weight:700; padding:14px 28px; border-radius:8px; text-decoration:none;">
+        Update your resume →
+      </a>
+
+      <div style="margin-top:36px;">
+        <p style="font-size:14px; color:#8a9bb0; margin-bottom:4px;">— Anthony</p>
+        <p style="font-size:12px; color:#3a4d66;">Founder, ResumeChiefz · 10 years in recruiting</p>
+      </div>
+    `)
+  }
+}
+
+// ── 9. Trial expiring soon ─────────────────────────────────────────────────────
+export function trialExpiringEmail(name: string, daysLeft: number): { subject: string; html: string } {
+  return {
+    subject: `Your ResumeChiefz access expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+    html: BASE(`
+      <div style="width:40px; height:3px; background:#c9a84c; margin-bottom:28px; border-radius:2px;"></div>
+
+      <h1 class="headline" style="font-size:28px; font-weight:800; color:#ffffff; line-height:1.25; letter-spacing:-.4px; margin-bottom:20px;">
+        ${daysLeft === 1 ? 'Last chance, ' : `${daysLeft} days left, `}${name}.
+      </h1>
+
+      <p style="font-size:15px; color:#8a9bb0; line-height:1.8; margin-bottom:16px;">
+        Your ResumeChiefz access expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. After that, you lose access to your resume builder, ATS scoring, and any resumes you've saved.
+      </p>
+
+      <p style="font-size:15px; color:#8a9bb0; line-height:1.8; margin-bottom:32px;">
+        Pro is $7.99/month. If you're actively job searching, that's a no-brainer — one callback from a better resume pays for months of access.
+      </p>
+
+      <a href="https://resumechiefz.com/app.html" style="display:inline-block; background:#c9a84c; color:#0a1628; font-size:14px; font-weight:700; padding:14px 28px; border-radius:8px; text-decoration:none;">
+        Keep my access →
+      </a>
+
+      <p style="font-size:13px; color:#3a4d66; margin-top:16px;">Cancel anytime. No contracts.</p>
+
+      <div style="margin-top:36px;">
+        <p style="font-size:14px; color:#8a9bb0; margin-bottom:4px;">— Anthony</p>
+        <p style="font-size:12px; color:#3a4d66;">Founder, ResumeChiefz</p>
+      </div>
+    `)
+  }
+}

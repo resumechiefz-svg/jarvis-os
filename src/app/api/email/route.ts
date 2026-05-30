@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { welcomeEmail, day3Email, paymentEmail, winbackEmail } from '@/lib/emails/templates'
+import { welcomeEmail, day3Email, paymentEmail, winbackEmail, weeklyTipEmail, featureUpdateEmail, marketNewsEmail, trialExpiringEmail } from '@/lib/emails/templates'
 
 async function send(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
@@ -68,6 +68,30 @@ export async function GET(req: NextRequest) {
     day3: day3Email(name, 2),
     payment: paymentEmail(name, 'Pro Monthly', '$7.99/mo'),
     winback: winbackEmail(name),
+    weekly: weeklyTipEmail({
+      headline: 'The one resume mistake that kills 80% of applications',
+      body: 'I\'ve reviewed thousands of resumes as a recruiter. The single most common reason a qualified candidate doesn\'t get called back has nothing to do with their experience.',
+      insight: 'ATS systems scan for exact keyword matches from the job description. If the posting says "project management" and your resume says "managing projects" — you\'re invisible. One word off and the system moves on.',
+      ctaText: 'Fix my resume keywords',
+    }),
+    feature: featureUpdateEmail({
+      feature: 'Job Description Matcher',
+      headline: 'Paste any job posting. Get a tailored resume.',
+      description: 'The new Job Description Matcher analyzes any job posting and rewrites your resume bullets to match — pulling the exact keywords, skills, and language recruiters are looking for.',
+      howToUse: [
+        'Open your resume in the builder',
+        'Click "Match to Job" in the top toolbar',
+        'Paste the job description and hit analyze',
+        'Review the suggested changes and apply with one click',
+      ],
+    }),
+    news: marketNewsEmail({
+      headline: 'Tech layoffs are down 60% — what that means for your search',
+      context: 'After 18 months of mass layoffs, the data is shifting. Hiring in software, product, and operations is up across mid-market companies. This changes the strategy.',
+      whatItMeans: 'Competition for roles is still real, but the market is opening back up — especially at companies under 500 people who didn\'t over-hire in 2021. If you\'ve been waiting, now is the time to move.',
+      tip: 'Update your resume now before the Q3 hiring push. Companies start filling roles in July and August for fall headcount. Most candidates wait until September. Don\'t be most candidates.',
+    }),
+    expiring: trialExpiringEmail(name, 2),
   }
 
   const email = templates[type] ?? templates.welcome
