@@ -5,12 +5,19 @@ import { useEffect, useRef } from 'react'
 interface Props {
   active: boolean
   agentColor?: string
+  amplitude?: number // 0-1, live audio level when speaking
 }
 
-export default function JarvisOrb({ active, agentColor }: Props) {
+export default function JarvisOrb({ active, agentColor, amplitude = 0 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const frameRef = useRef<number>(0)
   const timeRef = useRef(0)
+  const amplitudeRef = useRef(0)
+
+  // Smooth amplitude changes
+  useEffect(() => {
+    amplitudeRef.current = amplitude
+  }, [amplitude])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -109,7 +116,7 @@ export default function JarvisOrb({ active, agentColor }: Props) {
 
       // Particles
       particles.forEach(p => {
-        p.angle += p.speed * (active ? 1.6 : 1)
+        p.angle += p.speed * (active ? 1.6 : 1) * (1 + amplitudeRef.current * 3)
         const tilt = Math.PI / 5 * p.layer
         const x = cx + p.radius * Math.cos(p.angle) * Math.cos(tilt)
         const y = cy + p.radius * Math.sin(p.angle)
@@ -121,16 +128,28 @@ export default function JarvisOrb({ active, agentColor }: Props) {
         ctx.fill()
       })
 
-      // Core pulse
-      const pulse = 0.85 + Math.sin(t * (active ? 3 : 1.5)) * 0.15
+      // Core pulse — reacts to live audio amplitude
+      const amp = amplitudeRef.current
+      const pulse = 0.85 + Math.sin(t * (active ? 3 : 1.5)) * 0.15 + amp * 0.4
       const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22 * pulse)
-      coreGrad.addColorStop(0, `rgba(255,255,255,${active ? 0.9 : 0.5})`)
-      coreGrad.addColorStop(0.3, `rgba(${hexToRgb(BASE_COLOR)},${active ? 0.8 : 0.4})`)
+      const coreAlpha = Math.min(1, (active ? 0.9 : 0.5) + amp * 0.5)
+      coreGrad.addColorStop(0, `rgba(255,255,255,${coreAlpha})`)
+      coreGrad.addColorStop(0.3, `rgba(${hexToRgb(BASE_COLOR)},${Math.min(1, (active ? 0.8 : 0.4) + amp * 0.6)})`)
       coreGrad.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.beginPath()
       ctx.arc(cx, cy, R * 0.22 * pulse, 0, Math.PI * 2)
       ctx.fillStyle = coreGrad
       ctx.fill()
+
+      // Speaking ring — extra glow ring that pulses with voice
+      if (amp > 0.05) {
+        const ringR = R * (1.05 + amp * 0.25)
+        ctx.beginPath()
+        ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
+        ctx.strokeStyle = `rgba(${hexToRgb(BASE_COLOR)},${amp * 0.6})`
+        ctx.lineWidth = 2 + amp * 4
+        ctx.stroke()
+      }
     }
 
     function animate() {

@@ -47,9 +47,9 @@ export default function RightPanel({ telemetry, activeAgent }: Props) {
   return (
     <div className="right-panel h-full overflow-y-auto px-3 py-3">
       {/* Clock */}
-      <div className="mb-4 text-right">
-        <div className="text-[28px] font-mono text-cyan-300 leading-none tracking-wider">{timeStr}</div>
-        <div className="text-[10px] text-cyan-500/60 tracking-widest uppercase">{dateStr}</div>
+      <div className="mb-4 text-right" suppressHydrationWarning>
+        <div className="text-[28px] font-mono text-cyan-300 leading-none tracking-wider" suppressHydrationWarning>{timeStr}</div>
+        <div className="text-[10px] text-cyan-500/60 tracking-widest uppercase" suppressHydrationWarning>{dateStr}</div>
       </div>
 
       {/* Agent Status */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import NewsTicker from '@/components/hud/NewsTicker'
 import LeftPanel from '@/components/hud/LeftPanel'
@@ -37,9 +37,16 @@ export default function HUD() {
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [orbActive, setOrbActive] = useState(false)
+  const [orbAmplitude, setOrbAmplitude] = useState(0)
   const [bootLine, setBootLine] = useState(0)
   const [booting, setBooting] = useState(true)
   const [, setTick] = useState(0)
+  const amplitudeRef = useRef(0)
+
+  const handleAmplitude = useCallback((val: number) => {
+    amplitudeRef.current = val
+    setOrbAmplitude(val)
+  }, [])
 
   useEffect(() => {
     if (bootLine < BOOT_LINES.length) {
@@ -94,7 +101,7 @@ export default function HUD() {
         </div>
 
         <div className="relative">
-          <JarvisOrb active={orbActive} agentColor={agentColor} />
+          <JarvisOrb active={orbActive} agentColor={agentColor} amplitude={orbAmplitude} />
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
             <div
               className="text-[11px] font-bold tracking-[0.4em] uppercase"
@@ -130,6 +137,7 @@ export default function HUD() {
         messages={messages}
         onMessage={handleMessage}
         onAgentChange={handleAgentChange}
+        onAmplitude={handleAmplitude}
       />
 
       <div className="hud-footer flex items-center justify-between px-4">
