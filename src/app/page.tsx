@@ -7,6 +7,7 @@ import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
 import TelemetryLog from '@/components/hud/TelemetryLog'
 import CommandInterface from '@/components/hud/CommandInterface'
+import PushToggle from '@/components/hud/PushToggle'
 import type { Message, TelemetryEntry, AgentName } from '@/lib/types'
 
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
@@ -142,9 +143,13 @@ export default function HUD() {
 
       <div className="hud-footer flex items-center justify-between px-4">
         <span className="text-[9px] tracking-[0.2em] text-cyan-950 uppercase">
-          JARVIS OS v1.0 — AB COMMAND CENTER — &quot;WE DO NOT PLAY GAMES HERE&quot;
+          JARVIS OS v2.0 — AB COMMAND CENTER — &quot;WE DO NOT PLAY GAMES HERE&quot;
         </span>
         <div className="flex items-center gap-4">
+          <PushToggle />
+          <a href="/workspace" className="text-[9px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">
+            Workspace →
+          </a>
           {['NOVA', 'SAGE', 'VAULT', 'JARVIS'].map(a => (
             <span key={a} className="text-[9px] text-cyan-950">● {a}</span>
           ))}

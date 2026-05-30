@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { JARVIS_SYSTEM, NOVA_SYSTEM, SAGE_SYSTEM, VAULT_SYSTEM, ECHO_SYSTEM, REEL_SYSTEM, SCOUT_SYSTEM, LISTER_SYSTEM } from './prompts'
+import { JARVIS_SYSTEM, NOVA_SYSTEM, SAGE_SYSTEM, VAULT_SYSTEM, ECHO_SYSTEM, REEL_SYSTEM, SCOUT_SYSTEM, LISTER_SYSTEM, DEX_SYSTEM, BEACON_SYSTEM, LEDGER_SYSTEM, ATLAS_SYSTEM } from './prompts'
 import { supabaseAdmin } from '../supabase/client'
 import type { AgentName, JarvisResponse, Memory } from '../types'
 
@@ -33,6 +33,10 @@ function detectRoute(message: string): AgentName {
   if (lower.includes('reel') || lower.includes('cc content') || lower.includes('card chiefz post') || lower.includes('card chiefz social')) return 'reel'
   if (lower.includes('reddit') || lower.includes('scout') || lower.includes('product hunt') || lower.includes('growth') || lower.includes('seo gap')) return 'scout'
   if (lower.includes('list') || lower.includes('lister') || lower.includes('ebay listing') || lower.includes('format this card')) return 'lister'
+  if (lower.includes('bug') || lower.includes('error') || lower.includes('dex') || lower.includes('deploy') || lower.includes('broken') || lower.includes('fix')) return 'dex'
+  if (lower.includes('goal') || lower.includes('beacon') || lower.includes('accountability') || lower.includes('on track') || lower.includes('milestone')) return 'beacon'
+  if (lower.includes('money') || lower.includes('ledger') || lower.includes('net worth') || lower.includes('budget') || lower.includes('savings') || lower.includes('cash')) return 'ledger'
+  if (lower.includes('strategy') || lower.includes('atlas') || lower.includes('market') || lower.includes('roadmap') || lower.includes('100x') || lower.includes('next big') || lower.includes('business idea')) return 'atlas'
   return 'jarvis'
 }
 
@@ -60,6 +64,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   const agentSystemMap: Record<string, string> = {
     nova: NOVA_SYSTEM, sage: SAGE_SYSTEM, vault: VAULT_SYSTEM,
     echo: ECHO_SYSTEM, reel: REEL_SYSTEM, scout: SCOUT_SYSTEM, lister: LISTER_SYSTEM,
+    dex: DEX_SYSTEM, beacon: BEACON_SYSTEM, ledger: LEDGER_SYSTEM, atlas: ATLAS_SYSTEM,
   }
 
   if (route !== 'jarvis' && agentSystemMap[route]) {
