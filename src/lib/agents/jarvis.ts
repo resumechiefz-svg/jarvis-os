@@ -15,6 +15,45 @@ async function getMemories(): Promise<Memory[]> {
   return data ?? []
 }
 
+// Pull last 7 days of conversation summaries for persistent memory
+async function getConversationHistory(): Promise<string> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await supabaseAdmin
+    .from('ai_memories')
+    .select('content, context, created_at')
+    .eq('category', 'conversation_summary')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(14)
+
+  if (!data?.length) return ''
+
+  return '\n\n--- RECENT CONVERSATIONS (last 7 days) ---\n' +
+    data.map(d => {
+      const date = new Date(d.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      return `[${date}] AB: ${d.content}\nJarvis: ${d.context ?? '(responded)'}`
+    }).join('\n\n') +
+    '\n--- END RECENT CONVERSATIONS ---\n'
+}
+
+// Save a conversation summary after each exchange
+async function saveConversationSummary(userMessage: string, jarvisReply: string): Promise<void> {
+  // Only save substantive exchanges (not one-word commands)
+  if (userMessage.length < 20) return
+
+  // Save summary — keep short to not bloat context
+  const summary = userMessage.slice(0, 200)
+  const replySnippet = jarvisReply.slice(0, 300)
+
+  void supabaseAdmin.from('ai_memories').insert({
+    category: 'conversation_summary',
+    content: summary,
+    context: replySnippet,
+    importance: 6,
+    created_at: new Date().toISOString(),
+  })
+}
+
 async function saveMemory(content: string, category: string, context?: string): Promise<void> {
   await supabaseAdmin.from('ai_memories').insert({
     category,
@@ -52,14 +91,15 @@ async function callAgent(agent: AgentName, userMessage: string, systemPrompt: st
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
-  const [memories, richMemory] = await Promise.all([
+  const [memories, richMemory, conversationHistory] = await Promise.all([
     getMemories(),
     loadRichMemory(),
+    getConversationHistory(),
   ])
   const memoryContext = memories.length > 0
     ? `\n\nPermanent memory:\n${memories.map(m => `[${m.category}] ${m.content}`).join('\n')}`
     : ''
-  const fullContext = memoryContext + richMemory
+  const fullContext = memoryContext + richMemory + conversationHistory
 
   // Gather agent intel in the background — Jarvis always synthesizes and speaks
   const route = detectRoute(userMessage)
@@ -96,10 +136,8 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   const reply = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Auto-save key facts to memory
-  if (userMessage.length > 50) {
-    await saveMemory(userMessage, 'conversation', reply.slice(0, 200)).catch(() => {})
-  }
+  // Save conversation to persistent memory so Jarvis remembers across sessions
+  saveConversationSummary(userMessage, reply)
 
   return { agent: 'jarvis', message: reply }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { StockQuote, NovaStats, VaultStats, SageBrief } from '@/lib/types'
+import type { PortfolioSummary } from '@/lib/agents/tradepilot'
 
 function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -27,10 +28,12 @@ export default function LeftPanel() {
   const [nova, setNova] = useState<NovaStats | null>(null)
   const [vault, setVault] = useState<VaultStats | null>(null)
   const [sage, setSage] = useState<SageBrief | null>(null)
+  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null)
 
   useEffect(() => {
     const loadFast = () => {
       fetch('/api/stocks').then(r => r.json()).then(d => Array.isArray(d) ? setStocks(d) : null).catch(() => {})
+      fetch('/api/portfolio').then(r => r.json()).then(d => d?.equity !== undefined ? setPortfolio(d) : null).catch(() => {})
     }
     const loadSlow = () => {
       fetch('/api/nova').then(r => r.json()).then(d => d?.mrr !== undefined ? setNova(d) : null).catch(() => {})
@@ -50,8 +53,29 @@ export default function LeftPanel() {
     <div className="left-panel h-full overflow-hidden px-2 py-2">
       <div className="grid grid-cols-2 gap-1 h-full content-start">
 
+        {/* TradePilot Portfolio */}
+        <SectionHead title="TradePilot" badge={portfolio ? (portfolio.isLive ? '● LIVE' : '● PAPER') : 'ALPACA'} />
+        {portfolio ? (
+          <>
+            <Cell label="Equity" value={`$${portfolio.equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} color={up} />
+            <Cell
+              label="Day P&L"
+              value={`${portfolio.dayPL >= 0 ? '+' : ''}$${portfolio.dayPL.toFixed(2)}`}
+              sub={`${portfolio.dayPLPct >= 0 ? '+' : ''}${portfolio.dayPLPct.toFixed(2)}%`}
+              color={portfolio.dayPL >= 0 ? up : dn}
+            />
+            <Cell label="Cash" value={`$${portfolio.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} />
+            <Cell label="Positions" value={String(portfolio.positions.length)} sub={`${portfolio.openOrders} orders`} />
+          </>
+        ) : (
+          stocks.slice(0, 4).map(s => (
+            <Cell key={s.symbol} label={s.symbol} value={`$${s.price.toFixed(2)}`}
+              sub={`${s.change >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`} color={chg(s.change)} />
+          ))
+        )}
+
         {/* Markets */}
-        <SectionHead title="Markets" badge="ALPACA LIVE" />
+        <SectionHead title="Markets" badge="LIVE" />
         {stocks.slice(0, 4).map(s => (
           <Cell
             key={s.symbol}
