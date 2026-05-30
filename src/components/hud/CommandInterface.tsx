@@ -256,6 +256,18 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     <div className="command-interface flex flex-col h-full">
       {/* Message history */}
       <div ref={messagesRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
+        {messages.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center select-none">
+            <div className="text-[11px] text-cyan-500/30 tracking-widest uppercase">AB Command Center</div>
+            <div className="text-[10px] text-white/15 max-w-sm leading-relaxed">
+              Say <span className="text-cyan-600">&quot;Hey Jarvis&quot;</span> or click a quick command below.
+              All 12 agents are standing by.
+            </div>
+            <div className="flex gap-4 mt-1 text-[9px] text-white/10 tracking-widest">
+              <span>NOVA ●</span><span>SAGE ●</span><span>VAULT ●</span><span>ECHO ●</span><span>ATLAS ●</span>
+            </div>
+          </div>
+        )}
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             {msg.role === 'assistant' && (

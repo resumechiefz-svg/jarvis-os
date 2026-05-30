@@ -41,12 +41,18 @@ export default function HUD() {
   const [orbAmplitude, setOrbAmplitude] = useState(0)
   const [bootLine, setBootLine] = useState(0)
   const [booting, setBooting] = useState(true)
+  const [mrr, setMrr] = useState(0)
   const [, setTick] = useState(0)
   const amplitudeRef = useRef(0)
 
   const handleAmplitude = useCallback((val: number) => {
     amplitudeRef.current = val
     setOrbAmplitude(val)
+  }, [])
+
+  // Load MRR for roadmap
+  useEffect(() => {
+    fetch('/api/nova').then(r => r.json()).then(d => { if (d?.mrr) setMrr(d.mrr) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -94,20 +100,19 @@ export default function HUD() {
       <LeftPanel />
 
       <div className="center-panel">
+        {/* Primary objective */}
         <div className="w-full text-center mb-1">
-          <div className="text-[9px] tracking-[0.3em] text-cyan-500/40 uppercase">Primary Objective</div>
-          <div className="text-[10px] tracking-widest mt-0.5" style={{ color: agentColor }}>
+          <div className="text-[8px] tracking-[0.3em] text-cyan-500/30 uppercase">Primary Objective</div>
+          <div className="text-[10px] tracking-widest mt-0.5 font-bold" style={{ color: agentColor }}>
             7-FIGURE PORTFOLIO — FINANCIAL INDEPENDENCE BY 40
           </div>
         </div>
 
+        {/* Orb */}
         <div className="relative">
           <JarvisOrb active={orbActive} agentColor={agentColor} amplitude={orbAmplitude} />
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-            <div
-              className="text-[11px] font-bold tracking-[0.4em] uppercase"
-              style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}
-            >
+            <div className="text-[11px] font-bold tracking-[0.4em] uppercase" style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}>
               {activeAgent.toUpperCase()}
             </div>
             <div className="text-[8px] tracking-widest text-white/30 mt-0.5">
@@ -116,21 +121,29 @@ export default function HUD() {
           </div>
         </div>
 
-        <div className="flex gap-8 text-center">
+        {/* Live system stats */}
+        <div className="flex gap-6 text-center">
           {[
-            { label: 'AGENTS', value: '4' },
-            { label: 'PHASE', value: '1' },
-            { label: 'STATUS', value: 'LIVE' },
+            { label: 'AGENTS',  value: '12',   color: agentColor },
+            { label: 'PHASES',  value: '4/4',  color: '#00ff88' },
+            { label: 'STATUS',  value: 'LIVE', color: '#00ff88' },
           ].map(s => (
             <div key={s.label}>
-              <div className="text-[22px] font-mono leading-none" style={{ color: agentColor }}>{s.value}</div>
-              <div className="text-[8px] tracking-widest text-white/30 uppercase mt-0.5">{s.label}</div>
+              <div className="text-[20px] font-mono leading-none" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[8px] tracking-widest text-white/25 uppercase mt-0.5">{s.label}</div>
             </div>
           ))}
         </div>
+
+        {/* Active agent label */}
+        <div className="w-full text-center mt-1">
+          <div className="text-[8px] tracking-widest text-white/20 uppercase">
+            {booting ? 'Initializing system...' : `Active Agent — ${activeAgent.toUpperCase()}`}
+          </div>
+        </div>
       </div>
 
-      <RightPanel telemetry={telemetry} activeAgent={activeAgent} />
+      <RightPanel activeAgent={activeAgent} mrr={mrr} />
 
       <TelemetryLog entries={telemetry} />
 

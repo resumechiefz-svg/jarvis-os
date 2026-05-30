@@ -41,8 +41,8 @@ body::after {
 /* HUD Layout */
 .hud-root {
   display: grid;
-  grid-template-rows: 28px 1fr 36px 220px 48px;
-  grid-template-columns: 220px 1fr 220px;
+  grid-template-rows: 28px 1fr 32px 300px 44px;
+  grid-template-columns: 240px 1fr 240px;
   height: 100vh;
   width: 100vw;
   background: var(--bg);
