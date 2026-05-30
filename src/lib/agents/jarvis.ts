@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { JARVIS_SYSTEM, NOVA_SYSTEM, SAGE_SYSTEM, VAULT_SYSTEM, ECHO_SYSTEM, REEL_SYSTEM, SCOUT_SYSTEM, LISTER_SYSTEM, DEX_SYSTEM, BEACON_SYSTEM, LEDGER_SYSTEM, ATLAS_SYSTEM } from './prompts'
+import { loadRichMemory } from './memory-engine'
 import { supabaseAdmin } from '../supabase/client'
 import type { AgentName, JarvisResponse, Memory } from '../types'
 
@@ -51,10 +52,14 @@ async function callAgent(agent: AgentName, userMessage: string, systemPrompt: st
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
-  const memories = await getMemories()
+  const [memories, richMemory] = await Promise.all([
+    getMemories(),
+    loadRichMemory(),
+  ])
   const memoryContext = memories.length > 0
     ? `\n\nPermanent memory:\n${memories.map(m => `[${m.category}] ${m.content}`).join('\n')}`
     : ''
+  const fullContext = memoryContext + richMemory
 
   // Gather agent intel in the background — Jarvis always synthesizes and speaks
   const route = detectRoute(userMessage)
@@ -68,7 +73,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   }
 
   if (route !== 'jarvis' && agentSystemMap[route]) {
-    const intel = await callAgent(route as AgentName, userMessage, agentSystemMap[route], memoryContext)
+    const intel = await callAgent(route as AgentName, userMessage, agentSystemMap[route], fullContext)
     agentIntel = `\n\n[${route.toUpperCase()} INTELLIGENCE]\n${intel}`
     telemetryAgent = route as AgentName
   }
@@ -79,7 +84,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     { role: 'user', content: userMessage },
   ]
 
-  const systemPrompt = JARVIS_SYSTEM + memoryContext + agentIntel +
+  const systemPrompt = JARVIS_SYSTEM + fullContext + agentIntel +
     (agentIntel ? `\n\nDeliver the above intelligence as JARVIS — synthesized, crisp, and in your voice. Do not say "Nova says" or "Sage says". Just deliver the brief as if it's yours. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
