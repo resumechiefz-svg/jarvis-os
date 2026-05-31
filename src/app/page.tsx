@@ -22,14 +22,8 @@ const AGENT_COLORS: Record<string, string> = {
 }
 
 export default function HUD() {
+  // ALL hooks must be at top — before any conditional returns (React rules)
   const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
-  }, [])
-
-  if (isMobile) return <MobileChat />
-
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [orbActive, setOrbActive] = useState(false)
@@ -37,6 +31,10 @@ export default function HUD() {
   const [booting, setBooting] = useState(true)
   const [mrr, setMrr] = useState(0)
   const amplitudeRef = useRef(0)
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+  }, [])
 
   const handleAmplitude = useCallback((val: number) => {
     amplitudeRef.current = val
@@ -60,6 +58,9 @@ export default function HUD() {
   }, [])
 
   const agentColor = AGENT_COLORS[activeAgent] ?? '#00d4ff'
+
+  // Mobile: show clean chat only
+  if (isMobile) return <MobileChat />
 
   return (
     <div className="hud-root">

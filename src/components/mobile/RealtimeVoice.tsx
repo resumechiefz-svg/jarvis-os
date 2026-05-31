@@ -172,12 +172,12 @@ Speak conversationally — short answers unless detail is requested.`,
   }, [stopSession, onTranscript])
 
   const stateConfig = {
-    idle:       { icon: '🎙️', label: 'Hold to Talk', bg: 'rgba(0,212,255,0.1)', border: '#00d4ff', pulse: false },
+    idle:       { icon: '🎙️', label: 'Tap to Talk', bg: 'rgba(0,212,255,0.1)', border: '#00d4ff', pulse: false },
     connecting: { icon: '⟳',  label: 'Connecting...', bg: 'rgba(255,200,0,0.1)', border: '#ffc800', pulse: true },
-    listening:  { icon: '🎙️', label: 'Listening', bg: 'rgba(0,255,136,0.15)', border: '#00ff88', pulse: true },
+    listening:  { icon: '🎙️', label: 'Listening...', bg: 'rgba(0,255,136,0.15)', border: '#00ff88', pulse: true },
     thinking:   { icon: '⟳',  label: 'Thinking...', bg: 'rgba(0,212,255,0.1)', border: '#00d4ff', pulse: true },
-    speaking:   { icon: '🔊', label: 'Jarvis Speaking', bg: 'rgba(168,85,247,0.15)', border: '#a855f7', pulse: true },
-    error:      { icon: '⚠️', label: error || 'Error', bg: 'rgba(255,68,85,0.1)', border: '#ff4455', pulse: false },
+    speaking:   { icon: '🔊', label: 'Speaking', bg: 'rgba(168,85,247,0.15)', border: '#a855f7', pulse: true },
+    error:      { icon: '⚠️', label: 'Tap to retry', bg: 'rgba(255,68,85,0.1)', border: '#ff4455', pulse: false },
   }
 
   const cfg = stateConfig[state]

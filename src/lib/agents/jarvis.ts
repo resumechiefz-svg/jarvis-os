@@ -3,6 +3,7 @@ import { JARVIS_SYSTEM, NOVA_SYSTEM, SAGE_SYSTEM, VAULT_SYSTEM, ECHO_SYSTEM, REE
 import { loadRichMemory } from './memory-engine'
 import { supabaseAdmin } from '../supabase/client'
 import { searchMemories, saveMemory } from '../memory/vectors'
+import { loadProfile, rememberThis, isRememberIntent } from '../memory/profile'
 import type { AgentName, JarvisResponse, Memory } from '../types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -119,6 +120,13 @@ function isOutreachIntent(msg: string): boolean {
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
+  // ── "Remember this" — explicit memory pinning ────────────
+  if (isRememberIntent(userMessage)) {
+    const content = userMessage.replace(/^(remember\s*(that|this|:)?|make a note|don't forget|keep in mind)\s*/i, '').trim()
+    await rememberThis(content)
+    return { agent: 'jarvis' as AgentName, message: `Locked in, sir. I'll carry "${content}" in every future conversation.` }
+  }
+
   // ── Market Intel shortcut ─────────────────────────────────
   if (isMarketIntelIntent(userMessage)) {
     try {
@@ -169,6 +177,15 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Load AB's living profile ──────────────────────────────
+  let profileCtx = ''
+  try {
+    const profile = await loadProfile()
+    if (profile) {
+      profileCtx = `\n\n[AB PROFILE]\nFocus: ${profile.currentFocus.join(', ')}\nGoals: ${profile.activeGoals.join(', ')}\nStyle: ${profile.communicationStyle}\nPatterns: ${profile.patterns.join(', ')}`
+    }
+  } catch { /* skip */ }
+
   // ── Semantic memory retrieval — find relevant past context ──
   let semanticCtx = ''
   try {
@@ -202,7 +219,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     telemetryAgent = route
   }
 
-  const systemPrompt = JARVIS_SYSTEM + context + semanticCtx + liveData + agentIntel +
+  const systemPrompt = JARVIS_SYSTEM + context + profileCtx + semanticCtx + liveData + agentIntel +
     (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({

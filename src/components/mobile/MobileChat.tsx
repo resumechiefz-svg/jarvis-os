@@ -30,8 +30,10 @@ export default function MobileChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState<Array<{role: 'user'|'assistant'; content: string}>>([])
+  const [analyzingFile, setAnalyzingFile] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -67,23 +69,39 @@ export default function MobileChat() {
 
   const color = (agent?: string) => AGENT_COLORS[agent ?? 'jarvis'] ?? '#00d4ff'
 
+  const handleFile = useCallback(async (file: File) => {
+    if (!file || analyzingFile) return
+    setAnalyzingFile(true)
+    setMessages(m => [...m, { role: 'user', content: `📎 ${file.name}`, ts: new Date() }])
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('context', input.trim())
+    try {
+      const res = await fetch('/api/vision', { method: 'POST', body: formData })
+      const data = await res.json()
+      const reply = data.text ?? 'Could not analyze file.'
+      setMessages(m => [...m, { role: 'assistant', content: reply, agent: 'vault', ts: new Date() }])
+    } catch {
+      setMessages(m => [...m, { role: 'assistant', content: 'File analysis failed.', agent: 'jarvis', ts: new Date() }])
+    } finally {
+      setAnalyzingFile(false)
+      setInput('')
+    }
+  }, [analyzingFile, input])
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100dvh',
       background: '#020810', color: 'white', fontFamily: "'SF Mono', 'Fira Code', monospace",
     }}>
 
-      {/* Header */}
+      {/* Header — text only, no triangle */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+        display: 'flex', alignItems: 'center', padding: '14px 16px',
         borderBottom: '1px solid rgba(0,212,255,0.12)',
         background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(20px)',
         flexShrink: 0,
       }}>
-        {/* Triangle logo */}
-        <svg width="32" height="30" viewBox="0 0 260 250" style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.8))' }}>
-          <polygon points="130,236 8,18 252,18" fill="rgba(0,212,255,0.88)" stroke="rgba(0,212,255,1)" strokeWidth="2"/>
-        </svg>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.15em', color: '#00d4ff' }}>JARVIS</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>AB COMMAND CENTER</div>
@@ -97,11 +115,11 @@ export default function MobileChat() {
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', marginTop: 40 }}>
-            <svg width="60" height="56" viewBox="0 0 260 250" style={{ opacity: 0.2, filter: 'drop-shadow(0 0 16px rgba(0,212,255,0.5))' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+            <svg width="200" height="188" viewBox="0 0 260 250" style={{ filter: 'drop-shadow(0 0 32px rgba(0,212,255,0.7))' }}>
               <polygon points="130,236 8,18 252,18" fill="rgba(0,212,255,0.88)" stroke="rgba(0,212,255,1)" strokeWidth="2"/>
             </svg>
-            <div style={{ marginTop: 16, fontSize: 12, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>SAY ANYTHING</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.25em' }}>SAY ANYTHING</div>
           </div>
         )}
 
@@ -156,6 +174,34 @@ export default function MobileChat() {
         borderTop: '1px solid rgba(0,212,255,0.08)',
         background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(20px)',
       }}>
+        {/* Hidden file input — photos, PDFs, docs */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
+        />
+
+        {/* Paperclip upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={analyzingFile}
+          style={{
+            width: 44, height: 44, borderRadius: '50%', border: '1px solid rgba(0,212,255,0.2)',
+            background: analyzingFile ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.04)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer',
+          }}
+          title="Upload photo or file"
+        >
+          {analyzingFile
+            ? <span style={{ fontSize: 18, animation: 'pulse 1s infinite' }}>⏳</span>
+            : <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="rgba(0,212,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+          }
+        </button>
+
         <input
           ref={inputRef}
           value={input}
@@ -169,12 +215,28 @@ export default function MobileChat() {
             outline: 'none', fontFamily: 'inherit',
           }}
         />
-        {/* Realtime voice button */}
+        {/* Realtime voice — transcripts saved to shared memory */}
         <Suspense fallback={null}>
           <RealtimeVoice
             onTranscript={(text, role, agent) => {
-              if (role === 'user') setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
-              else setMessages(m => [...m, { role: 'assistant', content: text, agent, ts: new Date() }])
+              if (role === 'user') {
+                setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
+              } else {
+                setMessages(m => [...m, { role: 'assistant', content: text, agent, ts: new Date() }])
+                // Save voice exchange to shared memory so desktop picks it up
+                if (text.length > 20) {
+                  fetch('/api/memory/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      category: 'conversation_summary',
+                      content: `[Voice] ${text.slice(0, 200)}`,
+                      context: text.slice(0, 300),
+                      importance: 6,
+                    }),
+                  }).catch(() => {})
+                }
+              }
             }}
           />
         </Suspense>
