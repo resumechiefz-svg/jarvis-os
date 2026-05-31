@@ -164,8 +164,9 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
       />
 
       {/*
-        NPA Logo — inverted triangle + 3 horizontal stripes (the actual NPA mark)
-        Three stacked white bars, decreasing width top → bottom, centered in triangle
+        NPA Logo — exact replica
+        Solid white inverted triangle + 3 angled dark bars on the RIGHT side (not centered)
+        Bars are parallelograms: right end higher than left, staggered left as they descend
       */}
       <svg
         viewBox="0 0 260 250"
@@ -175,31 +176,33 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
           position: 'relative',
           zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 18px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 40px rgba(${r},${g},${b},0.45))`
-            : `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
+            ? `drop-shadow(0 0 20px rgba(${r},${g},${b},0.9)) drop-shadow(0 0 44px rgba(${r},${g},${b},0.4))`
+            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.45))`,
           transition: 'filter 0.4s ease',
         }}
       >
-        {/* Triangle outline — tip points DOWN */}
+        {/* Solid white triangle — solid fill like the NPA logo */}
         <polygon
           points="130,236 8,18 252,18"
-          fill={`rgba(${r},${g},${b},0.05)`}
-          stroke={`rgba(${r},${g},${b},${active ? 0.9 : 0.55})`}
-          strokeWidth="2"
+          fill={`rgba(${r},${g},${b},${active ? 0.18 : 0.1})`}
+          stroke={`rgba(${r},${g},${b},${active ? 0.92 : 0.58})`}
+          strokeWidth="1.8"
           strokeLinejoin="miter"
         />
 
         {/*
-          Three NPA stripes — centered, stepping narrower top → bottom
-          Bar spacing: 30px apart, each 20px tall, rx=2 for crisp corners
+          THREE angled bars — RIGHT side of triangle, NOT centered
+          Each is a parallelogram: right end ~16px higher than left end (≈11° angle)
+          Step pattern: each bar's left edge shifts ~16px further left going down
+          Right edges follow the triangle's right border, stepping left with taper
         */}
-        <g fill={`rgba(255,255,255,${active ? 1 : 0.82})`}>
-          {/* Stripe 1 — widest (top) */}
-          <rect x="66" y="82" width="128" height="20" rx="2" />
-          {/* Stripe 2 — medium */}
-          <rect x="84" y="118" width="92" height="20" rx="2" />
-          {/* Stripe 3 — narrowest (bottom) */}
-          <rect x="102" y="154" width="56" height="20" rx="2" />
+        <g fill={`rgba(255,255,255,${active ? 0.92 : 0.72})`}>
+          {/* Bar 1 — topmost, rightmost */}
+          <polygon points="122,90 204,74 204,92 122,108" />
+          {/* Bar 2 — middle */}
+          <polygon points="106,120 188,104 188,122 106,138" />
+          {/* Bar 3 — bottom, most left */}
+          <polygon points="88,150 166,134 166,152 88,168" />
         </g>
       </svg>
     </div>
