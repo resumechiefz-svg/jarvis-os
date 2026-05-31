@@ -164,31 +164,43 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
       />
 
       {/*
-        NPA Logo — clean inverted equilateral triangle, solid white stroke
-        Tip pointing DOWN, no interior marks, pure geometric
+        NPA Logo — inverted triangle + 3 horizontal stripes (the actual NPA mark)
+        Three stacked white bars, decreasing width top → bottom, centered in triangle
       */}
       <svg
-        viewBox="0 0 260 240"
+        viewBox="0 0 260 250"
         width={240}
         height={240}
         style={{
           position: 'relative',
           zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 18px rgba(${r},${g},${b},1)) drop-shadow(0 0 36px rgba(${r},${g},${b},0.5))`
+            ? `drop-shadow(0 0 18px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 40px rgba(${r},${g},${b},0.45))`
             : `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
           transition: 'filter 0.4s ease',
         }}
       >
-        {/* Pure inverted triangle — the NPA logo, exactly as designed */}
+        {/* Triangle outline — tip points DOWN */}
         <polygon
-          points="130,222 10,14 250,14"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.5"
+          points="130,236 8,18 252,18"
+          fill={`rgba(${r},${g},${b},0.05)`}
+          stroke={`rgba(${r},${g},${b},${active ? 0.9 : 0.55})`}
+          strokeWidth="2"
           strokeLinejoin="miter"
-          opacity={active ? 1 : 0.85}
         />
+
+        {/*
+          Three NPA stripes — centered, stepping narrower top → bottom
+          Bar spacing: 30px apart, each 20px tall, rx=2 for crisp corners
+        */}
+        <g fill={`rgba(255,255,255,${active ? 1 : 0.82})`}>
+          {/* Stripe 1 — widest (top) */}
+          <rect x="66" y="82" width="128" height="20" rx="2" />
+          {/* Stripe 2 — medium */}
+          <rect x="84" y="118" width="92" height="20" rx="2" />
+          {/* Stripe 3 — narrowest (bottom) */}
+          <rect x="102" y="154" width="56" height="20" rx="2" />
+        </g>
       </svg>
     </div>
   )
