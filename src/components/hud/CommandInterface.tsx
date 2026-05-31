@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, MicOff, Volume2, VolumeX, Square } from 'lucide-react'
+import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
 import type { Message, AgentName } from '@/lib/types'
 
 const AGENT_COLORS: Record<string, string> = {
@@ -89,11 +89,13 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
-  const [listening, setListening] = useState(false)   // wake word mode (always on)
-  const [triggered, setTriggered] = useState(false)    // hey jarvis detected
+  const [listening, setListening] = useState(false)
+  const [triggered, setTriggered] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
+  const [analyzingImage, setAnalyzingImage] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -240,6 +242,37 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     recognition.start()
   }, [send])
 
+  const handleImageUpload = useCallback(async (file: File) => {
+    if (!file || analyzingImage) return
+    setAnalyzingImage(true)
+
+    onMessage({ id: Date.now().toString(), role: 'user', agent: 'jarvis', content: `[Image: ${file.name}]`, timestamp: new Date() })
+
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('context', input.trim() || '')
+
+    try {
+      const res = await fetch('/api/vision', { method: 'POST', body: formData })
+      const data = await res.json()
+      const reply = data.text ?? 'Could not analyze image.'
+      onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'vault', content: reply, timestamp: new Date() })
+      onAgentChange('vault')
+      if (voiceEnabled) {
+        setSpeaking(true)
+        speakElevenLabs(reply, 'vault', onAmplitude).then(stop => {
+          stopSpeakRef.current = stop
+          setTimeout(() => { setSpeaking(false); onAmplitude?.(0) }, (reply.split(' ').length / 3) * 1000 + 1500)
+        })
+      }
+    } catch {
+      onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'jarvis', content: 'Vision error — check API.', timestamp: new Date() })
+    } finally {
+      setAnalyzingImage(false)
+      setInput('')
+    }
+  }, [analyzingImage, input, onMessage, onAgentChange, voiceEnabled, onAmplitude])
+
   const toggleMic = useCallback(() => {
     if (listening) {
       // Turn off
@@ -309,6 +342,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         ))}
       </div>
 
+      {/* Hidden image input */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = '' }}
+      />
+
       {/* Input row */}
       <div className="px-4 pb-3 flex gap-2">
         <div className="flex-1 flex items-center border border-cyan-800/50 bg-black/40 px-3">
@@ -324,6 +366,20 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
             autoFocus
           />
         </div>
+
+        {/* Camera / image upload */}
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          disabled={analyzingImage}
+          className={`px-3 border transition-colors ${
+            analyzingImage
+              ? 'border-yellow-500/70 text-yellow-400 bg-yellow-900/20 animate-pulse'
+              : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
+          }`}
+          title="Send photo to Jarvis — card pricing, chart analysis, anything"
+        >
+          <Camera size={14} />
+        </button>
 
         {/* Mic button — green = always-on wake word mode, cyan flash = triggered */}
         <button
