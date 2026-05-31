@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/market-intel",
+      "schedule": "0 7 * * 1-5"
+    },
+    {
+      "path": "/api/rc-outreach",
+      "schedule": "0 8 * * 1,3"
+    }
+  ]
+}

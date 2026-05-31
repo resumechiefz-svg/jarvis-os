@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
+const RealtimeVoice = lazy(() => import('./RealtimeVoice'))
 
 interface Message {
   role: 'user' | 'assistant'
@@ -168,6 +169,16 @@ export default function MobileChat() {
             outline: 'none', fontFamily: 'inherit',
           }}
         />
+        {/* Realtime voice button */}
+        <Suspense fallback={null}>
+          <RealtimeVoice
+            onTranscript={(text, role, agent) => {
+              if (role === 'user') setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
+              else setMessages(m => [...m, { role: 'assistant', content: text, agent, ts: new Date() }])
+            }}
+          />
+        </Suspense>
+
         <button
           onClick={() => send(input)}
           disabled={loading || !input.trim()}
