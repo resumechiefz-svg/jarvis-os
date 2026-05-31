@@ -46,6 +46,14 @@ export function invalidateContextCache() {
   contextCache = null
 }
 
+function isImageIntent(message: string): boolean {
+  const l = message.toLowerCase()
+  return (
+    (l.includes('image') || l.includes('photo') || l.includes('graphic') || l.includes('visual') || l.includes('picture') || l.includes('banner') || l.includes('thumbnail') || l.includes('generate an') || l.includes('create a') || l.includes('make a') || l.includes('lumen')) &&
+    (l.includes('for') || l.includes('instagram') || l.includes('twitter') || l.includes('post') || l.includes('blog') || l.includes('social') || l.includes('card chiefz') || l.includes('resumechiefz') || l.includes('image'))
+  )
+}
+
 function isBuildIntent(message: string): boolean {
   const l = message.toLowerCase()
   return (

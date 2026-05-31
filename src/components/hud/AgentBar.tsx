@@ -13,6 +13,7 @@ const AGENTS = [
   { name: 'BEACON',  color: '#34d399', active: true },
   { name: 'LEDGER',  color: '#f87171', active: true },
   { name: 'ATLAS',   color: '#e879f9', active: true },
+  { name: 'LUMEN',   color: '#fde68a', active: true },
 ]
 
 interface Props {
@@ -61,7 +62,7 @@ export default function AgentBar({ activeAgent }: Props) {
 
       {/* System status */}
       <div className="ml-auto shrink-0 flex items-center gap-3 pl-4">
-        <span className="text-[8px] text-green-500/60 tracking-widest">12 AGENTS ONLINE</span>
+        <span className="text-[8px] text-green-500/60 tracking-widest">13 AGENTS ONLINE</span>
         <span className="text-[8px] text-cyan-500/40 tracking-widest">PHASE 4 COMPLETE</span>
       </div>
     </div>
