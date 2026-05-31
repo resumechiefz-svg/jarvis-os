@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import MobileChat from '@/components/mobile/MobileChat'
 import AgentBar from '@/components/hud/AgentBar'
 import NewsTicker from '@/components/hud/NewsTicker'
 import ForgeBuildMonitor from '@/components/hud/ForgeBuildMonitor'
@@ -21,6 +22,14 @@ const AGENT_COLORS: Record<string, string> = {
 }
 
 export default function HUD() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+  }, [])
+
+  if (isMobile) return <MobileChat />
+
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [orbActive, setOrbActive] = useState(false)
