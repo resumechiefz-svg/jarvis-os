@@ -149,46 +149,75 @@ Produce a single, detailed image generation prompt. No markdown. No explanation.
 }
 
 // ── Google Imagen 3 API ───────────────────────────────────────────────────────
+// Uses imagen-3.0-generate-001 — Google's best image model (highest quality)
+// Falls back to imagen-3.0-fast-generate-001 if quota exceeded
+// Same API key as Google AI Studio (aistudio.google.com)
 
 async function generateWithImagen(prompt: string, aspectRatio: string = '1:1'): Promise<Buffer> {
   const apiKey = process.env.GOOGLE_IMAGEN_API_KEY ?? process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_IMAGEN_API_KEY not set — add it to .env.local')
+  if (!apiKey) throw new Error('GOOGLE_IMAGEN_API_KEY not set — go to aistudio.google.com → Get API key')
 
-  // Map aspect ratio to Imagen dimensions
-  const sizeMap: Record<string, string> = {
-    '1:1': '1024x1024',
-    '16:9': '1408x768',
-    '4:5': '896x1120',
-    '9:16': '768x1408',
+  // Imagen 3 aspect ratios (native support)
+  const validRatios: Record<string, string> = {
+    '1:1': '1:1',
+    '16:9': '16:9',
+    '4:5': '4:5',
+    '9:16': '9:16',
+    '3:4': '3:4',
   }
-  const size = sizeMap[aspectRatio] ?? '1024x1024'
+  const ratio = validRatios[aspectRatio] ?? '1:1'
 
-  // Use Gemini 2.0 Flash image generation (available via AI Studio API)
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseModalities: ['IMAGE'],
-          imageSizeConfig: { imageSize: size },
-        },
-      }),
+  // Try Imagen 3 (best quality) first, fall back to Imagen 3 Fast
+  const models = [
+    'imagen-3.0-generate-001',        // Flagship — highest quality, photorealistic
+    'imagen-3.0-fast-generate-001',   // Fast variant — good quality, quicker
+  ]
+
+  let lastError = ''
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: ratio,
+              safetyFilterLevel: 'block_only_high',   // Less restrictive for creative content
+              personGeneration: 'allow_adult',         // Allow people in images
+            },
+          }),
+        }
+      )
+
+      if (!res.ok) {
+        lastError = `${model}: HTTP ${res.status} — ${await res.text()}`
+        continue
+      }
+
+      const data = await res.json() as {
+        predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>
+      }
+
+      const imageData = data?.predictions?.[0]?.bytesBase64Encoded
+      if (!imageData) {
+        lastError = `${model}: No image in response`
+        continue
+      }
+
+      console.log(`[LUMEN] Generated with ${model}, ratio ${ratio}`)
+      return Buffer.from(imageData, 'base64')
+
+    } catch (err) {
+      lastError = `${model}: ${err instanceof Error ? err.message : String(err)}`
+      continue
     }
-  )
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Imagen API error ${res.status}: ${err}`)
   }
 
-  const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }> }
-  const imageData = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
-  if (!imageData) throw new Error('No image data returned from Imagen API')
-
-  return Buffer.from(imageData, 'base64')
+  throw new Error(`Imagen 3 failed: ${lastError}`)
 }
 
 // ── Slack Notifications ────────────────────────────────────────────────────────
