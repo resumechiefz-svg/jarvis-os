@@ -62,6 +62,63 @@ function typeColor(type: string) {
   return '#cce8ff'
 }
 
+// ── Google Calendar Widget ─────────────────────────────────
+interface GCalEvent { id: string; title: string; start: string; isAllDay: boolean; location?: string }
+
+function GoogleCalendarSection() {
+  const [events, setEvents] = useState<GCalEvent[]>([])
+  const [connected, setConnected] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/google/calendar?type=upcoming&days=7')
+      .then(r => r.json())
+      .then(d => { setConnected(d.connected); setEvents(d.events ?? []); setLoaded(true) })
+      .catch(() => setLoaded(true))
+  }, [])
+
+  if (!loaded) return null
+
+  const fmt = (iso: string) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const today = new Date()
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
+    if (d.toDateString() === today.toDateString()) return `Today ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <>
+      <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0,212,255,0.12)', paddingBottom: 3, marginBottom: 4, marginTop: 8 }}>
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(0,212,255,0.45)', textTransform: 'uppercase' }}>Calendar</span>
+        {!connected
+          ? <a href="/api/google/auth" style={{ fontSize: 7, color: '#c9a84c', textDecoration: 'none', fontWeight: 700 }}>Connect Google →</a>
+          : <span style={{ fontSize: 7, color: 'rgba(0,255,136,0.5)' }}>● LIVE</span>
+        }
+      </div>
+      {!connected && (
+        <div style={{ gridColumn: '1/-1', fontSize: 8, color: 'rgba(255,255,255,0.2)', padding: '4px 0' }}>
+          Click Connect Google above to sync your calendar
+        </div>
+      )}
+      {connected && events.length === 0 && (
+        <div style={{ gridColumn: '1/-1', fontSize: 8, color: 'rgba(255,255,255,0.2)', padding: '4px 0' }}>No events in next 7 days</div>
+      )}
+      {connected && events.slice(0, 5).map(ev => (
+        <div key={ev.id} style={{ gridColumn: '1/-1', display: 'flex', gap: 6, alignItems: 'flex-start', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+          <span style={{ fontSize: 7, color: '#00d4ff', minWidth: 60, fontFamily: 'monospace', flexShrink: 0, lineHeight: 1.4 }}>{fmt(ev.start)}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 8, fontWeight: 600, color: 'rgba(255,255,255,0.7)', lineHeight: 1.3 }}>{ev.title}</div>
+            {ev.location && <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.2)', marginTop: 1 }}>{ev.location}</div>}
+          </div>
+        </div>
+      ))}
+    </>
+  )
+}
+
 export default function LifeSection() {
   const [data, setData] = useState<LifeData | null>(null)
   const [newTodo, setNewTodo] = useState('')
@@ -211,6 +268,9 @@ export default function LifeSection() {
           +
         </button>
       </div>
+
+      {/* ── GOOGLE CALENDAR ──────────────────────── */}
+      <GoogleCalendarSection />
 
       {/* ── UPCOMING EVENTS ──────────────────────── */}
       <SHead title="Upcoming" badge="NEXT 30 DAYS" />
