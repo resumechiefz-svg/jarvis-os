@@ -5,19 +5,16 @@ import { useEffect, useRef } from 'react'
 interface Props {
   active: boolean
   agentColor?: string
-  amplitude?: number // 0-1, live audio level when speaking
+  amplitude?: number
 }
 
-export default function JarvisOrb({ active, agentColor, amplitude = 0 }: Props) {
+export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 0 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const frameRef = useRef<number>(0)
   const timeRef = useRef(0)
-  const amplitudeRef = useRef(0)
+  const ampRef = useRef(0)
 
-  // Smooth amplitude changes
-  useEffect(() => {
-    amplitudeRef.current = amplitude
-  }, [amplitude])
+  useEffect(() => { ampRef.current = amplitude }, [amplitude])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -25,150 +22,153 @@ export default function JarvisOrb({ active, agentColor, amplitude = 0 }: Props) 
     const ctx = canvas.getContext('2d')!
     const W = canvas.width
     const H = canvas.height
+
+    type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }
+    const particles: Particle[] = []
+
+    // Inverted triangle geometry
     const cx = W / 2
-    const cy = H / 2
-    const R = Math.min(W, H) * 0.38
+    const topY = H * 0.05
+    const scale = W * 0.88
+    const botY = topY + H * 0.88
 
-    const BASE_COLOR = agentColor ?? '#00d4ff'
-    const GOLD = '#c9a84c'
-    const PARTICLES = 60
+    const TL = { x: cx - scale / 2, y: topY }
+    const TR = { x: cx + scale / 2, y: topY }
+    const BOT = { x: cx, y: botY }
 
-    type Particle = { angle: number; radius: number; speed: number; size: number; opacity: number; layer: number }
-    const particles: Particle[] = Array.from({ length: PARTICLES }, (_, i) => ({
-      angle: (i / PARTICLES) * Math.PI * 2,
-      radius: R * (0.6 + Math.random() * 0.6),
-      speed: 0.003 + Math.random() * 0.006,
-      size: 1 + Math.random() * 2.5,
-      opacity: 0.3 + Math.random() * 0.7,
-      layer: Math.floor(Math.random() * 3),
-    }))
-
-    const hexToRgb = (hex: string) => {
-      const r = parseInt(hex.slice(1, 3), 16)
-      const g = parseInt(hex.slice(3, 5), 16)
-      const b = parseInt(hex.slice(5, 7), 16)
-      return `${r},${g},${b}`
+    function randomEdgePoint(): { x: number; y: number; nx: number; ny: number } {
+      const edge = Math.floor(Math.random() * 3)
+      const t = Math.random()
+      if (edge === 0) { // top
+        return { x: TL.x + t * (TR.x - TL.x), y: topY, nx: 0, ny: -1 }
+      } else if (edge === 1) { // left
+        const dx = BOT.x - TL.x, dy = BOT.y - TL.y, len = Math.sqrt(dx*dx+dy*dy)
+        return { x: TL.x + t * dx, y: TL.y + t * dy, nx: -dy/len, ny: dx/len }
+      } else { // right
+        const dx = TR.x - BOT.x, dy = topY - BOT.y, len = Math.sqrt(dx*dx+dy*dy)
+        return { x: BOT.x + t * dx, y: BOT.y + t * dy, nx: dy/len, ny: -dx/len }
+      }
     }
 
-    function draw(t: number) {
+    function spawnParticle() {
+      const { x, y, nx, ny } = randomEdgePoint()
+      const speed = (0.4 + Math.random() * 1.0) * (1 + ampRef.current * 4)
+      particles.push({ x, y, vx: nx * speed + (Math.random()-0.5)*0.4, vy: ny * speed + (Math.random()-0.5)*0.4, life: 0, maxLife: 35 + Math.random() * 55, size: 0.6 + Math.random() * 2.2 })
+    }
+
+    const hex = agentColor.replace('#','')
+    const r = parseInt(hex.slice(0,2),16)
+    const g = parseInt(hex.slice(2,4),16)
+    const b = parseInt(hex.slice(4,6),16)
+    const rgb = `${r},${g},${b}`
+
+    function draw() {
+      timeRef.current += 0.016
+      const t = timeRef.current
+      const pulse = active ? 0.55 + 0.45 * Math.sin(t * 3.5) + ampRef.current * 0.6 : 0.25 + 0.08 * Math.sin(t * 0.9)
+      const glowR = active ? 28 + 16 * Math.sin(t * 2.8) + ampRef.current * 35 : 10 + 3 * Math.sin(t * 0.7)
+
       ctx.clearRect(0, 0, W, H)
 
-      // Outer glow rings
-      for (let i = 3; i >= 1; i--) {
-        const gradient = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * (1 + i * 0.35))
-        gradient.addColorStop(0, `rgba(${hexToRgb(BASE_COLOR)},${0.08 / i})`)
-        gradient.addColorStop(1, 'rgba(0,0,0,0)')
-        ctx.fillStyle = gradient
-        ctx.beginPath()
-        ctx.arc(cx, cy, R * (1 + i * 0.35), 0, Math.PI * 2)
-        ctx.fill()
-      }
+      // Ambient glow
+      const radial = ctx.createRadialGradient(cx, (topY+botY)/2, 20, cx, (topY+botY)/2, glowR * 4)
+      radial.addColorStop(0, `rgba(${rgb},${pulse * 0.1})`)
+      radial.addColorStop(1, `rgba(${rgb},0)`)
+      ctx.fillStyle = radial
+      ctx.fillRect(0, 0, W, H)
 
-      // Sphere gradient
-      const sphereGrad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.05, cx, cy, R)
-      sphereGrad.addColorStop(0, `rgba(${hexToRgb(BASE_COLOR)},0.25)`)
-      sphereGrad.addColorStop(0.5, `rgba(${hexToRgb(BASE_COLOR)},0.08)`)
-      sphereGrad.addColorStop(1, `rgba(0,0,0,0.6)`)
+      // Triangle fill (very subtle)
       ctx.beginPath()
-      ctx.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx.fillStyle = sphereGrad
+      ctx.moveTo(TL.x, TL.y); ctx.lineTo(TR.x, TR.y); ctx.lineTo(BOT.x, BOT.y); ctx.closePath()
+      ctx.fillStyle = `rgba(${rgb},${0.03 + pulse * 0.04})`
       ctx.fill()
 
-      // Sphere border
+      // Triangle edge glow
       ctx.beginPath()
-      ctx.arc(cx, cy, R, 0, Math.PI * 2)
-      ctx.strokeStyle = `rgba(${hexToRgb(BASE_COLOR)},${active ? 0.8 : 0.4})`
-      ctx.lineWidth = active ? 2 : 1
+      ctx.moveTo(TL.x, TL.y); ctx.lineTo(TR.x, TR.y); ctx.lineTo(BOT.x, BOT.y); ctx.closePath()
+      ctx.shadowColor = agentColor
+      ctx.shadowBlur = glowR
+      ctx.strokeStyle = `rgba(${rgb},${0.35 + pulse * 0.4})`
+      ctx.lineWidth = 1.5
       ctx.stroke()
+      ctx.shadowBlur = 0
 
-      // Sweep line
-      const sweepAngle = t * 0.8
-      ctx.save()
-      ctx.beginPath()
-      ctx.moveTo(cx, cy)
-      ctx.arc(cx, cy, R, sweepAngle, sweepAngle + Math.PI * 0.35)
-      ctx.closePath()
-      ctx.fillStyle = `rgba(${hexToRgb(BASE_COLOR)},0.12)`
-      ctx.fill()
-      ctx.restore()
+      // Spawn particles
+      const rate = active ? 2 + Math.floor(ampRef.current * 10) : 1
+      for (let i = 0; i < rate; i++) if (Math.random() < 0.5) spawnParticle()
 
-      // Inner rings
-      for (let ring = 1; ring <= 3; ring++) {
-        const rr = R * (ring / 4)
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]
+        p.x += p.vx; p.y += p.vy; p.vy -= 0.008; p.life++
+        if (p.life >= p.maxLife) { particles.splice(i, 1); continue }
+        const alpha = (1 - p.life / p.maxLife) * 0.9
         ctx.beginPath()
-        ctx.arc(cx, cy, rr, 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(${hexToRgb(BASE_COLOR)},${0.15 - ring * 0.02})`
-        ctx.lineWidth = 0.5
-        ctx.stroke()
-      }
-
-      // Grid lines (latitude/longitude feel)
-      ctx.save()
-      ctx.globalAlpha = 0.1
-      for (let angle = 0; angle < Math.PI; angle += Math.PI / 6) {
-        ctx.beginPath()
-        ctx.ellipse(cx, cy, R, R * Math.abs(Math.cos(angle + t * 0.1)), 0, 0, Math.PI * 2)
-        ctx.strokeStyle = BASE_COLOR
-        ctx.lineWidth = 0.5
-        ctx.stroke()
-      }
-      ctx.restore()
-
-      // Particles
-      particles.forEach(p => {
-        p.angle += p.speed * (active ? 1.6 : 1) * (1 + amplitudeRef.current * 3)
-        const tilt = Math.PI / 5 * p.layer
-        const x = cx + p.radius * Math.cos(p.angle) * Math.cos(tilt)
-        const y = cy + p.radius * Math.sin(p.angle)
-        const depth = Math.cos(p.angle) * 0.5 + 0.5
-        if (depth < 0.1) return
-        ctx.beginPath()
-        ctx.arc(x, y, p.size * depth, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(${hexToRgb(p.layer === 1 ? GOLD : BASE_COLOR)},${p.opacity * depth})`
+        ctx.arc(p.x, p.y, p.size * (1 - p.life / p.maxLife * 0.5), 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${rgb},${alpha})`
+        ctx.shadowColor = agentColor
+        ctx.shadowBlur = 5
         ctx.fill()
-      })
-
-      // Core pulse — reacts to live audio amplitude
-      const amp = amplitudeRef.current
-      const pulse = 0.85 + Math.sin(t * (active ? 3 : 1.5)) * 0.15 + amp * 0.4
-      const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22 * pulse)
-      const coreAlpha = Math.min(1, (active ? 0.9 : 0.5) + amp * 0.5)
-      coreGrad.addColorStop(0, `rgba(255,255,255,${coreAlpha})`)
-      coreGrad.addColorStop(0.3, `rgba(${hexToRgb(BASE_COLOR)},${Math.min(1, (active ? 0.8 : 0.4) + amp * 0.6)})`)
-      coreGrad.addColorStop(1, 'rgba(0,0,0,0)')
-      ctx.beginPath()
-      ctx.arc(cx, cy, R * 0.22 * pulse, 0, Math.PI * 2)
-      ctx.fillStyle = coreGrad
-      ctx.fill()
-
-      // Speaking ring — extra glow ring that pulses with voice
-      if (amp > 0.05) {
-        const ringR = R * (1.05 + amp * 0.25)
-        ctx.beginPath()
-        ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(${hexToRgb(BASE_COLOR)},${amp * 0.6})`
-        ctx.lineWidth = 2 + amp * 4
-        ctx.stroke()
+        ctx.shadowBlur = 0
       }
+
+      frameRef.current = requestAnimationFrame(draw)
     }
 
-    function animate() {
-      timeRef.current += 0.016
-      draw(timeRef.current)
-      frameRef.current = requestAnimationFrame(animate)
-    }
-
-    animate()
+    draw()
     return () => cancelAnimationFrame(frameRef.current)
   }, [active, agentColor])
 
+  const hex = agentColor.replace('#','')
+  const r = parseInt(hex.slice(0,2),16)
+  const g = parseInt(hex.slice(2,4),16)
+  const b = parseInt(hex.slice(4,6),16)
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={320}
-      height={320}
-      className="drop-shadow-2xl"
-      style={{ filter: `drop-shadow(0 0 24px ${agentColor ?? '#00d4ff'}66)` }}
-    />
+    <div style={{ position: 'relative', width: 300, height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Particle canvas */}
+      <canvas
+        ref={canvasRef}
+        width={300}
+        height={300}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+      />
+
+      {/* SVG Jarvis Logo — NPA triangle adapted, "NEW PURPOSE APPAREL" removed */}
+      <svg
+        viewBox="0 0 300 280"
+        width={260}
+        height={260}
+        style={{
+          position: 'relative', zIndex: 1,
+          filter: active
+            ? `drop-shadow(0 0 20px rgba(${r},${g},${b},0.9)) drop-shadow(0 0 40px rgba(${r},${g},${b},0.4))`
+            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.4))`,
+          transition: 'filter 0.5s ease',
+        }}
+      >
+        {/* Inverted triangle — white fill like the original NPA logo */}
+        <polygon
+          points="150,8 295,265 5,265"
+          fill={`rgba(${r},${g},${b},0.08)`}
+          stroke={`rgba(${r},${g},${b},${active ? 0.85 : 0.45})`}
+          strokeWidth="1.5"
+        />
+
+        {/*
+          Interior mark — the NPA "E/lightning" emblem:
+          Three stepped horizontal bars forming a downward-pointing lightning shape,
+          overlapping the right side of the triangle
+        */}
+        <g fill={`rgba(${r},${g},${b},${active ? 1 : 0.8})`}>
+          {/* Top bar — widest */}
+          <rect x="145" y="80" width="82" height="22" rx="2" transform="skewX(-8)" />
+          {/* Middle bar — medium */}
+          <rect x="135" y="116" width="64" height="20" rx="2" transform="skewX(-8)" />
+          {/* Bottom point — narrows into the bolt tip */}
+          <polygon points="126,150 183,150 162,200 140,200" transform="skewX(-4)" />
+        </g>
+      </svg>
+    </div>
   )
 }
