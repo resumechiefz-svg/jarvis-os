@@ -127,6 +127,44 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     return { agent: 'jarvis' as AgentName, message: `Locked in, sir. I'll carry "${content}" in every future conversation.` }
   }
 
+  // ── Blog post generation ──────────────────────────────────
+  if (/write.*blog|blog.*post|auto.?blog|generate.*post for (rc|resumechiefz|card chiefz)/i.test(userMessage)) {
+    try {
+      const { runAutoBlog } = await import('./autoblog')
+      const brand = /card chiefz/i.test(userMessage) ? 'cc' : 'rc'
+      const result = await runAutoBlog(brand)
+      return { agent: 'echo' as AgentName, message: `Blog draft ready, sir.\n\nTitle: "${result.title}"\nSlug: /${result.slug}\n\nPosted to Slack for your approval. One tap to publish.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `Blog generation failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── Churn check ───────────────────────────────────────────
+  if (/churn|at.risk|cancel|losing subscribers/i.test(userMessage)) {
+    try {
+      const { runChurnPrediction } = await import('./churn-predict')
+      const risks = await runChurnPrediction()
+      return { agent: 'nova' as AgentName, message: risks.length > 0 ? `${risks.length} subscribers at churn risk, sir. Report posted to Slack with action items for each.` : 'No high-risk subscribers detected. RC retention looks healthy.' }
+    } catch (err) {
+      return { agent: 'nova' as AgentName, message: `Churn check failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── LinkedIn post ─────────────────────────────────────────
+  if (/post to linkedin|linkedin post|share on linkedin/i.test(userMessage)) {
+    try {
+      const { postToLinkedIn, isLinkedInConnected } = await import('./linkedin')
+      const connected = await isLinkedInConnected()
+      if (!connected) return { agent: 'echo' as AgentName, message: `LinkedIn not connected yet, sir. Visit /api/linkedin/auth to authorize, then I can post directly.` }
+      const content = userMessage.replace(/post (this |to |on )?linkedin:?/i, '').trim()
+      if (!content || content.length < 20) return { agent: 'echo' as AgentName, message: 'What would you like me to post? Give me the content.' }
+      const id = await postToLinkedIn(content)
+      return { agent: 'echo' as AgentName, message: `Posted to LinkedIn, sir. Post ID: ${id}` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `LinkedIn post failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   // ── Market Intel shortcut ─────────────────────────────────
   if (isMarketIntelIntent(userMessage)) {
     try {

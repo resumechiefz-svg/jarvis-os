@@ -12,9 +12,10 @@ type VoiceState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' 
 interface Props {
   onTranscript: (text: string, role: 'user' | 'assistant', agent?: string) => void
   onStateChange?: (state: VoiceState) => void
+  autoStart?: boolean
 }
 
-export default function RealtimeVoice({ onTranscript, onStateChange }: Props) {
+export default function RealtimeVoice({ onTranscript, onStateChange, autoStart }: Props) {
   const [state, setState] = useState<VoiceState>('idle')
   const [error, setError] = useState('')
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -38,6 +39,9 @@ export default function RealtimeVoice({ onTranscript, onStateChange }: Props) {
 
   // Cleanup on unmount
   useEffect(() => () => stopSession(), [stopSession])
+
+  // Auto-start if launched from Siri shortcut
+  useEffect(() => { if (autoStart) startSession() }, [autoStart])
 
   const startSession = useCallback(async () => {
     if (sessionActiveRef.current) { stopSession(); return }

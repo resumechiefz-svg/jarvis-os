@@ -39,6 +39,11 @@ export default function MobileChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // Auto-start voice if launched from Siri shortcut (?voice=1)
+  const [autoVoice] = useState(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('voice') === '1'
+  )
+
   const send = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
     const userMsg: Message = { role: 'user', content: text, ts: new Date() }
@@ -217,7 +222,7 @@ export default function MobileChat() {
         />
         {/* Realtime voice — transcripts saved to shared memory */}
         <Suspense fallback={null}>
-          <RealtimeVoice
+          <RealtimeVoice autoStart={autoVoice}
             onTranscript={(text, role, agent) => {
               if (role === 'user') {
                 setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
