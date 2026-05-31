@@ -29,7 +29,7 @@ async function jarvisApi(path: string, method = 'GET', body?: Record<string, unk
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SESSION}` },
     body: body ? JSON.stringify(body) : undefined,
   })
-  return res.json()
+  return res.json() as Promise<Record<string, unknown>>
 }
 
 async function askJarvis(userId: string, message: string): Promise<string> {
