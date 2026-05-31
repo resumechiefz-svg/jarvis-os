@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { StockQuote, NovaStats } from '@/lib/types'
 import type { PortfolioSummary } from '@/lib/agents/tradepilot'
 import LifeSection from './LifeSection'
+import PlaidSection from './PlaidSection'
 
 function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -78,6 +79,9 @@ export default function LeftPanel() {
         <Cell label="Churn" value={nova ? String(nova.churn) : '—'} sub="30d" color={nova?.churn ? dn : nu} />
         <Cell label="Resumes" value={nova ? String(nova.resumesGenerated) : '—'} sub="30d" />
         <Cell label="Conversion" value={nova && nova.activeUsers > 0 ? `${((nova.newSubs / Math.max(nova.activeUsers, 1)) * 100).toFixed(1)}%` : '—'} />
+
+        {/* Plaid — Net worth, accounts, spend */}
+        <PlaidSection />
 
         {/* Life Dashboard — training, meals, todos, events */}
         <LifeSection />
