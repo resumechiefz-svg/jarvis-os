@@ -28,15 +28,16 @@ export async function GET(req: NextRequest) {
   await saveTokens(tokens)
 
   return new NextResponse(`
-    <html><body style="font-family:sans-serif;background:#020810;color:#00ff88;padding:40px;text-align:center">
-      <h1>✅ Google Connected</h1>
+    <!DOCTYPE html><html><head><meta charset="utf-8"/></head>
+    <body style="font-family:sans-serif;background:#020810;color:#00ff88;padding:40px;text-align:center">
+      <h1>Google Connected</h1>
       <p style="color:#cce8ff;margin:12px 0">Signed in as <strong>${userInfo.email}</strong></p>
-      <p style="color:#666;margin:8px 0">Calendar · Sheets · Drive · Gmail — all linked to Jarvis</p>
+      <p style="color:#666;margin:8px 0">Calendar, Sheets, Drive, Gmail - all linked to Jarvis</p>
       <p style="margin-top:24px">
         <a href="/" style="background:#00d4ff;color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700">
-          Open Jarvis →
+          Open Jarvis
         </a>
       </p>
     </body></html>
-  `, { headers: { 'Content-Type': 'text/html' } })
+  `, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 }
