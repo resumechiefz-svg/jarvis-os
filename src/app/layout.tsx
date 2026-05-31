@@ -4,6 +4,10 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'JARVIS OS — AB Command Center',
   description: 'Personal AI command center',
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
 }
 
 export const viewport: Viewport = {

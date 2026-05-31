@@ -11,8 +11,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#00d4ff',
     orientation: 'landscape',
     icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      { src: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
     shortcuts: [
       { name: 'Morning Brief', url: '/?cmd=morning+brief', description: 'Get your morning brief' },
