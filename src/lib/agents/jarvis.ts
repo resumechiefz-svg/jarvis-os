@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { JARVIS_SYSTEM, NOVA_SYSTEM, SAGE_SYSTEM, VAULT_SYSTEM, ECHO_SYSTEM, REEL_SYSTEM, SCOUT_SYSTEM, LISTER_SYSTEM, DEX_SYSTEM, BEACON_SYSTEM, LEDGER_SYSTEM, ATLAS_SYSTEM } from './prompts'
 import { loadRichMemory } from './memory-engine'
 import { supabaseAdmin } from '../supabase/client'
+import { searchMemories, saveMemory } from '../memory/vectors'
 import type { AgentName, JarvisResponse, Memory } from '../types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -21,7 +22,7 @@ async function getCachedContext(): Promise<string> {
     return contextCache.context
   }
 
-  // Load all context in parallel
+  // Load all context in parallel — now includes vector semantic search
   const [memories, richMemory, convHistory] = await Promise.all([
     supabaseAdmin.from('ai_memories').select('category, content, importance').order('importance', { ascending: false }).limit(15).then(r => r.data ?? []),
     loadRichMemory().catch(() => ''),
@@ -75,6 +76,7 @@ function detectRoute(message: string): AgentName {
   if (lower.includes('goal') || lower.includes('beacon') || lower.includes('accountability') || lower.includes('progress')) return 'beacon'
   if (lower.includes('finances') || lower.includes('ledger') || lower.includes('money') || lower.includes('savings') || lower.includes('bills overview')) return 'ledger'
   if (lower.includes('strategy') || lower.includes('atlas') || lower.includes('market intel') || lower.includes('business idea') || lower.includes('acquisition')) return 'atlas'
+  if (lower.includes('outreach') || lower.includes('rc outreach') || lower.includes('linkedin post') || lower.includes('reddit post') || lower.includes('resumechiefz content')) return 'echo'
   return 'jarvis'
 }
 
@@ -103,7 +105,42 @@ function isPortfolioQuery(msg: string): boolean {
     l.includes('stock') || l.includes('how much') || l.includes('how are') || l.includes('performance')
 }
 
+function isMarketIntelIntent(msg: string): boolean {
+  const l = msg.toLowerCase()
+  return l.includes('market intel') || l.includes('competitor') || l.includes('run intel') ||
+    l.includes('check competitors') || l.includes('what are competitors') || l.includes('card market') && l.includes('report')
+}
+
+function isOutreachIntent(msg: string): boolean {
+  const l = msg.toLowerCase()
+  return (l.includes('run outreach') || l.includes('generate outreach') || l.includes('rc posts') ||
+    l.includes('resumechiefz posts') || l.includes('generate posts') || l.includes('content for resumechiefz')) &&
+    !l.includes('card chiefz')
+}
+
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
+  // ── Market Intel shortcut ─────────────────────────────────
+  if (isMarketIntelIntent(userMessage)) {
+    try {
+      const { runMarketIntel } = await import('./market-intel')
+      const result = await runMarketIntel()
+      return { agent: 'scout' as AgentName, message: `Market intel sweep complete, sir.\n\n${result.summary.slice(0, 800)}...\n\nFull report posted to Slack #market-intel.` }
+    } catch (err) {
+      return { agent: 'scout' as AgentName, message: `Market intel failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── RC Outreach shortcut ──────────────────────────────────
+  if (isOutreachIntent(userMessage)) {
+    try {
+      const { runRCOutreach } = await import('./rc-outreach')
+      const posts = await runRCOutreach()
+      return { agent: 'echo' as AgentName, message: `RC Outreach batch ready, sir. Generated ${posts.length} posts:\n${posts.map(p => `• ${p.platform}${p.community ? ` (${p.community})` : ''}`).join('\n')}\n\nAll sent to Slack for your approval.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `RC Outreach failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   const [context, route] = await Promise.all([
     getCachedContext(),
     Promise.resolve(detectRoute(userMessage)),
@@ -132,6 +169,17 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Semantic memory retrieval — find relevant past context ──
+  let semanticCtx = ''
+  try {
+    const semanticMemories = await searchMemories(userMessage, { limit: 5, minSimilarity: 0.4 })
+    if (semanticMemories.length > 0) {
+      semanticCtx = '\n\n[RELEVANT MEMORIES]\n' + semanticMemories
+        .map(m => `[${m.category}] ${m.content}`)
+        .join('\n')
+    }
+  } catch { /* skip if not set up yet */ }
+
   // Inject live portfolio data for trading questions — no hallucination
   let liveData = ''
   if (isPortfolioQuery(userMessage)) {
@@ -154,7 +202,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     telemetryAgent = route
   }
 
-  const systemPrompt = JARVIS_SYSTEM + context + liveData + agentIntel +
+  const systemPrompt = JARVIS_SYSTEM + context + semanticCtx + liveData + agentIntel +
     (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
@@ -166,14 +214,22 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   const reply = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Save conversation async — don't block response
+  // Save conversation with vector embedding async — don't block response
   if (userMessage.length > 20) {
-    void supabaseAdmin.from('ai_memories').insert({
+    void saveMemory({
       category: 'conversation_summary',
       content: userMessage.slice(0, 200),
       context: reply.slice(0, 300),
       importance: 6,
-      created_at: new Date().toISOString(),
+    }).catch(() => {
+      // Fallback to plain insert if embedding fails
+      void supabaseAdmin.from('ai_memories').insert({
+        category: 'conversation_summary',
+        content: userMessage.slice(0, 200),
+        context: reply.slice(0, 300),
+        importance: 6,
+        created_at: new Date().toISOString(),
+      })
     })
   }
 

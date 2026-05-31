@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
+import { Mic, MicOff, Volume2, VolumeX, Square, Camera, Radio } from 'lucide-react'
+const RealtimeVoice = lazy(() => import('@/components/mobile/RealtimeVoice'))
 import type { Message, AgentName } from '@/lib/types'
 
 const AGENT_COLORS: Record<string, string> = {
@@ -94,6 +95,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
+  const [realtimeOpen, setRealtimeOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -342,6 +344,25 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         ))}
       </div>
 
+      {/* Realtime voice overlay */}
+      {realtimeOpen && (
+        <div className="px-4 pb-2 border-t border-purple-900/30 bg-purple-950/10">
+          <div className="flex items-center gap-3 py-2">
+            <span className="text-[9px] text-purple-400/60 tracking-widest uppercase">Realtime Voice</span>
+            <Suspense fallback={null}>
+              <RealtimeVoice
+                onTranscript={(text, role, agent) => {
+                  const msg = { id: Date.now().toString(), role, agent: (agent ?? 'jarvis') as import('@/lib/types').AgentName, content: text, timestamp: new Date() }
+                  onMessage(msg)
+                  if (agent) onAgentChange(agent as import('@/lib/types').AgentName)
+                }}
+              />
+            </Suspense>
+            <span className="text-[8px] text-white/20">Speak naturally — Jarvis listens and responds in voice</span>
+          </div>
+        </div>
+      )}
+
       {/* Hidden image input */}
       <input
         ref={imageInputRef}
@@ -366,6 +387,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
             autoFocus
           />
         </div>
+
+        {/* OpenAI Realtime voice — full conversation mode */}
+        <button
+          onClick={() => setRealtimeOpen(o => !o)}
+          className={`px-3 border transition-colors ${realtimeOpen ? 'border-purple-500 text-purple-400 bg-purple-900/20 animate-pulse' : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'}`}
+          title="Realtime voice conversation with Jarvis"
+        >
+          <Radio size={14} />
+        </button>
 
         {/* Camera / image upload */}
         <button
