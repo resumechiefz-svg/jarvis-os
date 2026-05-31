@@ -164,9 +164,8 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
       />
 
       {/*
-        NPA Logo — exact replica
-        Solid white inverted triangle + 3 angled dark bars on the RIGHT side (not centered)
-        Bars are parallelograms: right end higher than left, staggered left as they descend
+        NPA Logo — solid white inverted triangle with 3 black dashes cut into it.
+        Uses SVG clipPath so the dashes are holes in the white shape, not separate elements.
       */}
       <svg
         viewBox="0 0 260 250"
@@ -176,33 +175,38 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
           position: 'relative',
           zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 20px rgba(${r},${g},${b},0.9)) drop-shadow(0 0 44px rgba(${r},${g},${b},0.4))`
-            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.45))`,
+            ? `drop-shadow(0 0 22px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 50px rgba(${r},${g},${b},0.4))`
+            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.5))`,
           transition: 'filter 0.4s ease',
         }}
       >
-        {/* Solid white triangle — solid fill like the NPA logo */}
+        <defs>
+          {/* Clip the whole logo to the triangle shape */}
+          <clipPath id={`tri-${r}`}>
+            <polygon points="130,236 8,18 252,18" />
+          </clipPath>
+        </defs>
+
+        {/* Step 1: Solid white triangle */}
         <polygon
           points="130,236 8,18 252,18"
-          fill={`rgba(${r},${g},${b},${active ? 0.18 : 0.1})`}
-          stroke={`rgba(${r},${g},${b},${active ? 0.92 : 0.58})`}
-          strokeWidth="1.8"
-          strokeLinejoin="miter"
+          fill={`rgba(${r},${g},${b},${active ? 0.92 : 0.6})`}
+          stroke={`rgba(${r},${g},${b},${active ? 1 : 0.7})`}
+          strokeWidth="2"
         />
 
         {/*
-          THREE angled bars — RIGHT side of triangle, NOT centered
-          Each is a parallelogram: right end ~16px higher than left end (≈11° angle)
-          Step pattern: each bar's left edge shifts ~16px further left going down
-          Right edges follow the triangle's right border, stepping left with taper
+          Step 2: Three black dashes — drawn ON TOP of the white fill, clipped to triangle.
+          These are the cutouts. Positioned on the RIGHT side, angled so right end is higher.
+          They sit inside the white triangle = appear as three dark slits, exactly like the NPA mark.
         */}
-        <g fill={`rgba(255,255,255,${active ? 0.92 : 0.72})`}>
-          {/* Bar 1 — topmost, rightmost */}
-          <polygon points="122,90 204,74 204,92 122,108" />
-          {/* Bar 2 — middle */}
-          <polygon points="106,120 188,104 188,122 106,138" />
-          {/* Bar 3 — bottom, most left */}
-          <polygon points="88,150 166,134 166,152 88,168" />
+        <g clipPath={`url(#tri-${r})`} fill="#020810">
+          {/* Dash 1 — top */}
+          <polygon points="120,90 208,72 208,92 120,110" />
+          {/* Dash 2 — middle */}
+          <polygon points="100,122 188,104 188,124 100,142" />
+          {/* Dash 3 — bottom */}
+          <polygon points="80,154 162,136 162,156 80,174" />
         </g>
       </svg>
     </div>
