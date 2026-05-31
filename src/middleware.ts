@@ -10,8 +10,8 @@ const CRON_ROUTES = ['/api/monitor', '/api/analyze', '/api/conversion']
 // Mobile iOS shortcut — uses x-jarvis-key (handled inside route)
 const MOBILE_ROUTES = ['/api/mobile']
 
-// Always public — push subscriptions, auth endpoint itself
-const PUBLIC_ROUTES = ['/api/push', '/api/auth']
+// Always public — push subscriptions, auth endpoint, news feed (client-side fetch, no sensitive data)
+const PUBLIC_ROUTES = ['/api/push', '/api/auth', '/api/news', '/api/stocks']
 
 function isAuthenticated(req: NextRequest): boolean {
   if (!SESSION_SECRET) return true // Dev: skip if no secret configured

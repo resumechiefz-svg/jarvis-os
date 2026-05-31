@@ -80,6 +80,13 @@ function needsSonnet(message: string, route: AgentName): boolean {
   )
 }
 
+function isPortfolioQuery(msg: string): boolean {
+  const l = msg.toLowerCase()
+  return l.includes('portfolio') || l.includes('position') || l.includes('alpaca') ||
+    l.includes('trading') || l.includes('trade') || l.includes('p&l') || l.includes('equity') ||
+    l.includes('stock') || l.includes('how much') || l.includes('how are') || l.includes('performance')
+}
+
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
   const [context, route] = await Promise.all([
     getCachedContext(),
@@ -91,6 +98,15 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   let agentIntel = ''
   let telemetryAgent: AgentName = 'jarvis'
+
+  // Inject live portfolio data for trading questions — no hallucination
+  let liveData = ''
+  if (isPortfolioQuery(userMessage)) {
+    try {
+      const { getPortfolioBrief } = await import('./tradepilot')
+      liveData = '\n\n[LIVE PORTFOLIO DATA]\n' + await getPortfolioBrief()
+    } catch { /* skip */ }
+  }
 
   // Only call sub-agents for relevant complex queries
   if (route !== 'jarvis' && AGENT_SYSTEMS[route] && usesSonnet) {
@@ -105,7 +121,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     telemetryAgent = route
   }
 
-  const systemPrompt = JARVIS_SYSTEM + context + agentIntel +
+  const systemPrompt = JARVIS_SYSTEM + context + liveData + agentIntel +
     (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({

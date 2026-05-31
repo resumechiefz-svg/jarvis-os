@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { chat, morningBrief } from '@/lib/agents/jarvis'
+import { chat, morningBrief, invalidateContextCache } from '@/lib/agents/jarvis'
+
+// Pre-warm context cache on module load so first user message is fast
+import('@/lib/agents/jarvis').then(m => m.invalidateContextCache?.()).catch(() => {})
+// Actually warm it by triggering a background load
+setTimeout(() => {
+  import('@/lib/agents/jarvis').then(({ chat: warmChat }) => {
+    // Fire a dummy internal call to populate the cache
+    warmChat('warmup', []).catch(() => {})
+  }).catch(() => {})
+}, 2000)
 
 export async function POST(req: NextRequest) {
   try {
