@@ -167,12 +167,7 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
         NPA Logo — solid white inverted triangle with 3 black dashes cut into it.
         Uses SVG clipPath so the dashes are holes in the white shape, not separate elements.
       */}
-      {/*
-        NPA Logo — SVG mask technique:
-        mask WHITE areas = solid fill shows through (the triangle)
-        mask BLACK areas = transparent holes (the three dashes)
-        Result: solid glowing triangle with 3 transparent slits — exactly the NPA mark
-      */}
+      {/* Clean NPA inverted triangle — solid fill, glow edge, no interior marks */}
       <svg
         viewBox="0 0 260 250"
         width={240}
@@ -181,28 +176,18 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
           position: 'relative',
           zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 22px rgba(${r},${g},${b},1)) drop-shadow(0 0 50px rgba(${r},${g},${b},0.45))`
+            ? `drop-shadow(0 0 24px rgba(${r},${g},${b},1)) drop-shadow(0 0 52px rgba(${r},${g},${b},0.45))`
             : `drop-shadow(0 0 10px rgba(${r},${g},${b},0.55))`,
           transition: 'filter 0.4s ease',
         }}
       >
-        <defs>
-          <mask id="npa-mask">
-            {/* White = fill shows, Black = transparent hole */}
-            {/* Triangle shape — solid white = the logo body */}
-            <polygon points="130,236 8,18 252,18" fill="white" />
-            {/* Three dashes — black = cut-through holes, right side, angled */}
-            <polygon points="122,88 207,70 207,90 122,108" fill="black" />
-            <polygon points="103,120 188,102 188,122 103,140" fill="black" />
-            <polygon points="82,152 163,134 163,154 82,172" fill="black" />
-          </mask>
-        </defs>
-
-        {/* Single solid rect with mask applied = triangle with 3 holes punched through */}
-        <rect
-          x="0" y="0" width="260" height="250"
-          fill={`rgba(${r},${g},${b},${active ? 0.95 : 0.65})`}
-          mask="url(#npa-mask)"
+        {/* Solid filled triangle — clean, no marks */}
+        <polygon
+          points="130,236 8,18 252,18"
+          fill={`rgba(${r},${g},${b},${active ? 0.88 : 0.55})`}
+          stroke={`rgba(${r},${g},${b},${active ? 1 : 0.7})`}
+          strokeWidth="2"
+          strokeLinejoin="miter"
         />
       </svg>
     </div>
