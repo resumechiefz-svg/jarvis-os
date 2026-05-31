@@ -167,57 +167,70 @@ async function generateWithImagen(prompt: string, aspectRatio: string = '1:1'): 
   }
   const ratio = validRatios[aspectRatio] ?? '1:1'
 
-  // Try Imagen 3 (best quality) first, fall back to Imagen 3 Fast
-  const models = [
-    'imagen-3.0-generate-001',        // Flagship — highest quality, photorealistic
-    'imagen-3.0-fast-generate-001',   // Fast variant — good quality, quicker
+  // Model priority — requires billing enabled at ai.dev (~$0.04/image)
+  // Imagen 4 requires paid plan; Gemini image models work with billing
+  const imagenModels = [
+    // Imagen 4 (paid plan required — highest quality)
+    { name: 'imagen-4.0-ultra-generate-001', type: 'predict' as const },
+    { name: 'imagen-4.0-generate-001', type: 'predict' as const },
+    // Gemini image generation (billing required — very good quality)
+    { name: 'gemini-3.1-flash-image', type: 'generate' as const },
+    { name: 'gemini-3-pro-image', type: 'generate' as const },
+    { name: 'gemini-2.5-flash-image', type: 'generate' as const },
   ]
 
   let lastError = ''
-  for (const model of models) {
+  for (const { name, type } of imagenModels) {
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            instances: [{ prompt }],
-            parameters: {
-              sampleCount: 1,
-              aspectRatio: ratio,
-              safetyFilterLevel: 'block_only_high',   // Less restrictive for creative content
-              personGeneration: 'allow_adult',         // Allow people in images
-            },
-          }),
-        }
-      )
+      let imageBase64 = ''
 
-      if (!res.ok) {
-        lastError = `${model}: HTTP ${res.status} — ${await res.text()}`
-        continue
+      if (type === 'predict') {
+        // Imagen-style API (predict endpoint)
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${name}:predict?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instances: [{ prompt }],
+              parameters: { sampleCount: 1, aspectRatio: ratio, safetyFilterLevel: 'block_only_high', personGeneration: 'allow_adult' },
+            }),
+          }
+        )
+        if (!res.ok) { lastError = `${name}: HTTP ${res.status} — ${(await res.text()).slice(0, 300)}`; continue }
+        const data = await res.json() as { predictions?: Array<{ bytesBase64Encoded?: string }> }
+        imageBase64 = data?.predictions?.[0]?.bytesBase64Encoded ?? ''
+
+      } else {
+        // Gemini generateContent endpoint
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${name}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+            }),
+          }
+        )
+        if (!res.ok) { lastError = `${name}: HTTP ${res.status} — ${(await res.text()).slice(0, 300)}`; continue }
+        const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string } }> } }> }
+        const parts = data?.candidates?.[0]?.content?.parts ?? []
+        imageBase64 = parts.find(p => p.inlineData?.data)?.inlineData?.data ?? ''
       }
 
-      const data = await res.json() as {
-        predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>
-      }
+      if (!imageBase64) { lastError = `${name}: no image data returned`; continue }
 
-      const imageData = data?.predictions?.[0]?.bytesBase64Encoded
-      if (!imageData) {
-        lastError = `${model}: No image in response`
-        continue
-      }
-
-      console.log(`[LUMEN] Generated with ${model}, ratio ${ratio}`)
-      return Buffer.from(imageData, 'base64')
+      console.log(`[LUMEN] ✓ Generated with ${name} | ratio ${ratio}`)
+      return Buffer.from(imageBase64, 'base64')
 
     } catch (err) {
-      lastError = `${model}: ${err instanceof Error ? err.message : String(err)}`
-      continue
+      lastError = `${name}: ${err instanceof Error ? err.message : String(err)}`
     }
   }
 
-  throw new Error(`Imagen 3 failed: ${lastError}`)
+  throw new Error(`Image generation failed — enable billing at ai.dev to activate LUMEN. Last error: ${lastError}`)
 }
 
 // ── Slack Notifications ────────────────────────────────────────────────────────
