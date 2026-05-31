@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import AgentBar from '@/components/hud/AgentBar'
 import NewsTicker from '@/components/hud/NewsTicker'
+import ForgeBuildMonitor from '@/components/hud/ForgeBuildMonitor'
 import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
 import GoalOne from '@/components/hud/GoalOne'
@@ -93,6 +94,7 @@ export default function HUD() {
       <RightPanel activeAgent={activeAgent} mrr={mrr} />
 
       {/* Row 3: News ticker (moved from top) */}
+      <ForgeBuildMonitor />
       <NewsTicker />
 
       {/* Row 4: Command interface */}

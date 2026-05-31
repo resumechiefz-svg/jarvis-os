@@ -46,6 +46,14 @@ export function invalidateContextCache() {
   contextCache = null
 }
 
+function isBuildIntent(message: string): boolean {
+  const l = message.toLowerCase()
+  return (
+    (l.includes('build') || l.includes('create') || l.includes('make') || l.includes('develop') || l.includes('launch') || l.includes('ship') || l.includes('code')) &&
+    (l.includes('app') || l.includes('site') || l.includes('tool') || l.includes('saas') || l.includes('dashboard') || l.includes('platform') || l.includes('website') || l.includes('product'))
+  )
+}
+
 function detectRoute(message: string): AgentName {
   const lower = message.toLowerCase()
   if (lower.includes('stripe') || lower.includes('mrr') || lower.includes('subscriber') || lower.includes('nova') || lower.includes('resumechiefz revenue') || lower.includes('conversion')) return 'nova'
@@ -98,6 +106,23 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   let agentIntel = ''
   let telemetryAgent: AgentName = 'jarvis'
+
+  // FORGE: detect build intent and hand off to build engine
+  if (isBuildIntent(userMessage)) {
+    try {
+      const { startBuild } = await import('./forge/builder')
+      const job = await startBuild(userMessage)
+      return {
+        agent: 'jarvis' as AgentName,
+        message: `FORGE is on it, sir. I've handed "${userMessage}" to the build engine.\n\nAtlas is speccing the architecture now. You'll get updates in #forge on Slack as each phase completes — spec, build, deploy. When it's live, I'll post the URL.\n\nBuild ID: ${job.id}`,
+      }
+    } catch (err) {
+      return {
+        agent: 'jarvis' as AgentName,
+        message: `FORGE couldn't start: ${err instanceof Error ? err.message : 'Unknown error'}. Try again or check #forge in Slack.`,
+      }
+    }
+  }
 
   // Inject live portfolio data for trading questions — no hallucination
   let liveData = ''
