@@ -26,88 +26,117 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
     type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number }
     const particles: Particle[] = []
 
-    // Inverted triangle geometry
+    // Inverted triangle geometry — tip at bottom center
     const cx = W / 2
-    const topY = H * 0.05
-    const scale = W * 0.88
-    const botY = topY + H * 0.88
+    const pad = W * 0.08
+    const topY = H * 0.06
+    const botY = H * 0.90
 
-    const TL = { x: cx - scale / 2, y: topY }
-    const TR = { x: cx + scale / 2, y: topY }
+    const TL = { x: pad, y: topY }
+    const TR = { x: W - pad, y: topY }
     const BOT = { x: cx, y: botY }
 
     function randomEdgePoint(): { x: number; y: number; nx: number; ny: number } {
       const edge = Math.floor(Math.random() * 3)
       const t = Math.random()
-      if (edge === 0) { // top
+      if (edge === 0) {
+        // top edge
         return { x: TL.x + t * (TR.x - TL.x), y: topY, nx: 0, ny: -1 }
-      } else if (edge === 1) { // left
-        const dx = BOT.x - TL.x, dy = BOT.y - TL.y, len = Math.sqrt(dx*dx+dy*dy)
-        return { x: TL.x + t * dx, y: TL.y + t * dy, nx: -dy/len, ny: dx/len }
-      } else { // right
-        const dx = TR.x - BOT.x, dy = topY - BOT.y, len = Math.sqrt(dx*dx+dy*dy)
-        return { x: BOT.x + t * dx, y: BOT.y + t * dy, nx: dy/len, ny: -dx/len }
+      } else if (edge === 1) {
+        // left edge
+        const dx = BOT.x - TL.x, dy = BOT.y - TL.y
+        const len = Math.sqrt(dx * dx + dy * dy)
+        return { x: TL.x + t * dx, y: TL.y + t * dy, nx: -dy / len, ny: dx / len }
+      } else {
+        // right edge
+        const dx = BOT.x - TR.x, dy = BOT.y - TR.y
+        const len = Math.sqrt(dx * dx + dy * dy)
+        return { x: TR.x + t * dx, y: TR.y + t * dy, nx: dy / len, ny: -dx / len }
       }
     }
 
     function spawnParticle() {
       const { x, y, nx, ny } = randomEdgePoint()
-      const speed = (0.4 + Math.random() * 1.0) * (1 + ampRef.current * 4)
-      particles.push({ x, y, vx: nx * speed + (Math.random()-0.5)*0.4, vy: ny * speed + (Math.random()-0.5)*0.4, life: 0, maxLife: 35 + Math.random() * 55, size: 0.6 + Math.random() * 2.2 })
+      const speed = (0.3 + Math.random() * 0.9) * (1 + ampRef.current * 3)
+      particles.push({
+        x, y,
+        vx: nx * speed + (Math.random() - 0.5) * 0.3,
+        vy: ny * speed + (Math.random() - 0.5) * 0.3,
+        life: 0,
+        maxLife: 40 + Math.random() * 60,
+        size: 0.5 + Math.random() * 1.8,
+      })
     }
 
-    const hex = agentColor.replace('#','')
-    const r = parseInt(hex.slice(0,2),16)
-    const g = parseInt(hex.slice(2,4),16)
-    const b = parseInt(hex.slice(4,6),16)
+    const hex = agentColor.replace('#', '')
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
     const rgb = `${r},${g},${b}`
 
     function draw() {
       timeRef.current += 0.016
       const t = timeRef.current
-      const pulse = active ? 0.55 + 0.45 * Math.sin(t * 3.5) + ampRef.current * 0.6 : 0.25 + 0.08 * Math.sin(t * 0.9)
-      const glowR = active ? 28 + 16 * Math.sin(t * 2.8) + ampRef.current * 35 : 10 + 3 * Math.sin(t * 0.7)
+      const pulse = active
+        ? 0.6 + 0.4 * Math.sin(t * 3.5) + ampRef.current * 0.5
+        : 0.2 + 0.08 * Math.sin(t * 0.8)
+      const glowR = active
+        ? 30 + 18 * Math.sin(t * 2.5) + ampRef.current * 40
+        : 12 + 4 * Math.sin(t * 0.6)
 
       ctx.clearRect(0, 0, W, H)
 
-      // Ambient glow
-      const radial = ctx.createRadialGradient(cx, (topY+botY)/2, 20, cx, (topY+botY)/2, glowR * 4)
-      radial.addColorStop(0, `rgba(${rgb},${pulse * 0.1})`)
+      // Ambient center glow
+      const midY = (topY + botY) / 2
+      const radial = ctx.createRadialGradient(cx, midY, 10, cx, midY, glowR * 5)
+      radial.addColorStop(0, `rgba(${rgb},${pulse * 0.12})`)
       radial.addColorStop(1, `rgba(${rgb},0)`)
       ctx.fillStyle = radial
       ctx.fillRect(0, 0, W, H)
 
-      // Triangle fill (very subtle)
+      // Triangle solid fill — very subtle inner glow
       ctx.beginPath()
-      ctx.moveTo(TL.x, TL.y); ctx.lineTo(TR.x, TR.y); ctx.lineTo(BOT.x, BOT.y); ctx.closePath()
-      ctx.fillStyle = `rgba(${rgb},${0.03 + pulse * 0.04})`
+      ctx.moveTo(TL.x, TL.y)
+      ctx.lineTo(TR.x, TR.y)
+      ctx.lineTo(BOT.x, BOT.y)
+      ctx.closePath()
+      const innerGrad = ctx.createLinearGradient(cx, topY, cx, botY)
+      innerGrad.addColorStop(0, `rgba(${rgb},${0.12 + pulse * 0.1})`)
+      innerGrad.addColorStop(1, `rgba(${rgb},${0.01})`)
+      ctx.fillStyle = innerGrad
       ctx.fill()
 
-      // Triangle edge glow
+      // Triangle stroke — the NPA outline
       ctx.beginPath()
-      ctx.moveTo(TL.x, TL.y); ctx.lineTo(TR.x, TR.y); ctx.lineTo(BOT.x, BOT.y); ctx.closePath()
+      ctx.moveTo(TL.x, TL.y)
+      ctx.lineTo(TR.x, TR.y)
+      ctx.lineTo(BOT.x, BOT.y)
+      ctx.closePath()
       ctx.shadowColor = agentColor
       ctx.shadowBlur = glowR
-      ctx.strokeStyle = `rgba(${rgb},${0.35 + pulse * 0.4})`
-      ctx.lineWidth = 1.5
+      ctx.strokeStyle = `rgba(${rgb},${0.55 + pulse * 0.45})`
+      ctx.lineWidth = active ? 2 : 1.5
       ctx.stroke()
       ctx.shadowBlur = 0
 
       // Spawn particles
-      const rate = active ? 2 + Math.floor(ampRef.current * 10) : 1
-      for (let i = 0; i < rate; i++) if (Math.random() < 0.5) spawnParticle()
+      const rate = active ? 2 + Math.floor(ampRef.current * 8) : 1
+      for (let i = 0; i < rate; i++) if (Math.random() < 0.45) spawnParticle()
 
-      // Update particles
+      // Draw + update particles
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]
-        p.x += p.vx; p.y += p.vy; p.vy -= 0.008; p.life++
+        p.x += p.vx
+        p.y += p.vy
+        p.vy -= 0.007
+        p.life++
         if (p.life >= p.maxLife) { particles.splice(i, 1); continue }
-        const alpha = (1 - p.life / p.maxLife) * 0.9
+        const alpha = (1 - p.life / p.maxLife) * 0.85
         ctx.beginPath()
-        ctx.arc(p.x, p.y, p.size * (1 - p.life / p.maxLife * 0.5), 0, Math.PI * 2)
+        ctx.arc(p.x, p.y, p.size * (1 - (p.life / p.maxLife) * 0.4), 0, Math.PI * 2)
         ctx.fillStyle = `rgba(${rgb},${alpha})`
         ctx.shadowColor = agentColor
-        ctx.shadowBlur = 5
+        ctx.shadowBlur = 4
         ctx.fill()
         ctx.shadowBlur = 0
       }
@@ -119,55 +148,47 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
     return () => cancelAnimationFrame(frameRef.current)
   }, [active, agentColor])
 
-  const hex = agentColor.replace('#','')
-  const r = parseInt(hex.slice(0,2),16)
-  const g = parseInt(hex.slice(2,4),16)
-  const b = parseInt(hex.slice(4,6),16)
+  const hex = agentColor.replace('#', '')
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
 
   return (
-    <div style={{ position: 'relative', width: 300, height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Particle canvas */}
+    <div style={{ position: 'relative', width: 260, height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Particle + glow canvas */}
       <canvas
         ref={canvasRef}
-        width={300}
-        height={300}
+        width={260}
+        height={260}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       />
 
-      {/* SVG Jarvis Logo — NPA triangle adapted, "NEW PURPOSE APPAREL" removed */}
+      {/*
+        NPA Logo — clean inverted equilateral triangle, solid white stroke
+        Tip pointing DOWN, no interior marks, pure geometric
+      */}
       <svg
-        viewBox="0 0 300 280"
-        width={260}
-        height={260}
+        viewBox="0 0 260 240"
+        width={240}
+        height={240}
         style={{
-          position: 'relative', zIndex: 1,
+          position: 'relative',
+          zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 20px rgba(${r},${g},${b},0.9)) drop-shadow(0 0 40px rgba(${r},${g},${b},0.4))`
-            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.4))`,
-          transition: 'filter 0.5s ease',
+            ? `drop-shadow(0 0 18px rgba(${r},${g},${b},1)) drop-shadow(0 0 36px rgba(${r},${g},${b},0.5))`
+            : `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
+          transition: 'filter 0.4s ease',
         }}
       >
-        {/* Inverted triangle — white fill like the original NPA logo */}
+        {/* Pure inverted triangle — the NPA logo, exactly as designed */}
         <polygon
-          points="150,8 295,265 5,265"
-          fill={`rgba(${r},${g},${b},0.08)`}
-          stroke={`rgba(${r},${g},${b},${active ? 0.85 : 0.45})`}
-          strokeWidth="1.5"
+          points="130,222 10,14 250,14"
+          fill="none"
+          stroke="white"
+          strokeWidth="2.5"
+          strokeLinejoin="miter"
+          opacity={active ? 1 : 0.85}
         />
-
-        {/*
-          Interior mark — the NPA "E/lightning" emblem:
-          Three stepped horizontal bars forming a downward-pointing lightning shape,
-          overlapping the right side of the triangle
-        */}
-        <g fill={`rgba(${r},${g},${b},${active ? 1 : 0.8})`}>
-          {/* Top bar — widest */}
-          <rect x="145" y="80" width="82" height="22" rx="2" transform="skewX(-8)" />
-          {/* Middle bar — medium */}
-          <rect x="135" y="116" width="64" height="20" rx="2" transform="skewX(-8)" />
-          {/* Bottom point — narrows into the bolt tip */}
-          <polygon points="126,150 183,150 162,200 140,200" transform="skewX(-4)" />
-        </g>
       </svg>
     </div>
   )

@@ -62,14 +62,6 @@ export default function HUD() {
 
       {/* Row 2 Center: Orb + Goal */}
       <div className="center-panel">
-        {/* Objective */}
-        <div className="w-full text-center">
-          <div className="text-[7px] tracking-[0.3em] text-cyan-500/30 uppercase">Primary Objective</div>
-          <div className="text-[9px] tracking-widest mt-0.5 font-bold" style={{ color: agentColor }}>
-            7-FIGURE PORTFOLIO — FINANCIAL INDEPENDENCE BY 40
-          </div>
-        </div>
-
         {/* Orb */}
         <div className="relative shrink-0">
           <JarvisOrb active={orbActive} agentColor={agentColor} amplitude={orbAmplitude} />
