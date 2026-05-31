@@ -167,6 +167,12 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
         NPA Logo — solid white inverted triangle with 3 black dashes cut into it.
         Uses SVG clipPath so the dashes are holes in the white shape, not separate elements.
       */}
+      {/*
+        NPA Logo — SVG mask technique:
+        mask WHITE areas = solid fill shows through (the triangle)
+        mask BLACK areas = transparent holes (the three dashes)
+        Result: solid glowing triangle with 3 transparent slits — exactly the NPA mark
+      */}
       <svg
         viewBox="0 0 260 250"
         width={240}
@@ -175,39 +181,29 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
           position: 'relative',
           zIndex: 1,
           filter: active
-            ? `drop-shadow(0 0 22px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 50px rgba(${r},${g},${b},0.4))`
-            : `drop-shadow(0 0 8px rgba(${r},${g},${b},0.5))`,
+            ? `drop-shadow(0 0 22px rgba(${r},${g},${b},1)) drop-shadow(0 0 50px rgba(${r},${g},${b},0.45))`
+            : `drop-shadow(0 0 10px rgba(${r},${g},${b},0.55))`,
           transition: 'filter 0.4s ease',
         }}
       >
         <defs>
-          {/* Clip the whole logo to the triangle shape */}
-          <clipPath id={`tri-${r}`}>
-            <polygon points="130,236 8,18 252,18" />
-          </clipPath>
+          <mask id="npa-mask">
+            {/* White = fill shows, Black = transparent hole */}
+            {/* Triangle shape — solid white = the logo body */}
+            <polygon points="130,236 8,18 252,18" fill="white" />
+            {/* Three dashes — black = cut-through holes, right side, angled */}
+            <polygon points="122,88 207,70 207,90 122,108" fill="black" />
+            <polygon points="103,120 188,102 188,122 103,140" fill="black" />
+            <polygon points="82,152 163,134 163,154 82,172" fill="black" />
+          </mask>
         </defs>
 
-        {/* Step 1: Solid white triangle */}
-        <polygon
-          points="130,236 8,18 252,18"
-          fill={`rgba(${r},${g},${b},${active ? 0.92 : 0.6})`}
-          stroke={`rgba(${r},${g},${b},${active ? 1 : 0.7})`}
-          strokeWidth="2"
+        {/* Single solid rect with mask applied = triangle with 3 holes punched through */}
+        <rect
+          x="0" y="0" width="260" height="250"
+          fill={`rgba(${r},${g},${b},${active ? 0.95 : 0.65})`}
+          mask="url(#npa-mask)"
         />
-
-        {/*
-          Step 2: Three black dashes — drawn ON TOP of the white fill, clipped to triangle.
-          These are the cutouts. Positioned on the RIGHT side, angled so right end is higher.
-          They sit inside the white triangle = appear as three dark slits, exactly like the NPA mark.
-        */}
-        <g clipPath={`url(#tri-${r})`} fill="#020810">
-          {/* Dash 1 — top */}
-          <polygon points="120,90 208,72 208,92 120,110" />
-          {/* Dash 2 — middle */}
-          <polygon points="100,122 188,104 188,124 100,142" />
-          {/* Dash 3 — bottom */}
-          <polygon points="80,154 162,136 162,156 80,174" />
-        </g>
       </svg>
     </div>
   )
