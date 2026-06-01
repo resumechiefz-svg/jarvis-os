@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * SEO Rank Tracker — monitors ResumeChiefz keyword rankings weekly
  * Uses Google Search Console API (free) or scrapes SERPs
@@ -20,14 +21,6 @@ const RC_KEYWORDS = [
   'best resume builder 2026',
 ]
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#market-intel', text }),
-  })
-}
 
 async function checkGoogleSearchConsole(): Promise<Array<{ keyword: string; position: number; clicks: number; impressions: number }>> {
   // If Google Search Console API is configured

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Proactive Jarvis — monitors triggers and alerts AB without being asked
  * Runs every 15 minutes via cron
@@ -8,11 +9,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function slack(msg: string) {
-  const url = process.env.SLACK_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-}
 
 async function checkPortfolio(): Promise<string | null> {
   try {

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * eBay Real-Time Sales Monitor — polls every 15 min, Slacks new sales
  * Uses eBay Browse API for sold items from the Card Chiefz store
@@ -7,11 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 const EBAY_APP_ID = process.env.EBAY_APP_ID ?? ''
 const EBAY_SELLER = 'cardchiefz'
 
-async function slack(msg: string) {
-  const url = process.env.SLACK_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-}
 
 async function getEbayToken(): Promise<string> {
   const res = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {

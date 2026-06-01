@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Relationship Tracker — key people in AB's orbit
  * Tracks: last contact, context, open items, follow-up needed
@@ -10,14 +11,6 @@ import { saveMemory } from '../memory/vectors'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export interface Contact {
   name: string

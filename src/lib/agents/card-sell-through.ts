@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Card Sell-Through Analytics — turns 1400+ sales into strategy
  * Best categories, price points, days, players, hold vs flip patterns
@@ -8,14 +9,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export async function analyzeSellThrough(): Promise<string> {
   const { data: sales } = await supabaseAdmin

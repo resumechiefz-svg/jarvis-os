@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Card Chiefz Email List — audience you own, not eBay's
  * Collectors subscribe at cardchiefz.com
@@ -11,14 +12,6 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const RESEND_KEY = process.env.RESEND_API_KEY
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   if (!RESEND_KEY) return

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Photo-to-eBay Listing Pipeline — full automation
  * Upload a card photo → Claude Vision reads it → Lister formats listing → Posts to eBay
@@ -19,14 +20,6 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const EBAY_TOKEN = process.env.EBAY_USER_TOKEN
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 // ── Step 1: Vision — read the card from a photo ─────────────────────────────
 

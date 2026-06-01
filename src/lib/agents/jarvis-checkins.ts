@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Jarvis-Initiated Check-ins — proactively follows up on things AB mentioned
  * "I'll think about it" → Jarvis asks 3 days later
@@ -10,14 +11,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 interface CheckIn {
   id?: string

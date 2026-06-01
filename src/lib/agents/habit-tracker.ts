@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Habit Tracker — granular daily habits beyond workouts
  * Reading, cold plunge, study, meditation, anything AB wants to build
@@ -7,14 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export interface Habit {
   id: string

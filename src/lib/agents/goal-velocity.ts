@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Goal Velocity — calculates trajectory toward financial independence
  * Answers: "At this pace, you'll hit your goal at age X"
@@ -8,14 +9,6 @@ import { supabaseAdmin } from '../supabase/client'
 const TOKEN = process.env.SLACK_BOT_TOKEN
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export interface VelocityReport {
   currentEquity: number

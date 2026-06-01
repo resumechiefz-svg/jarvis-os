@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Weekly Sunday Review — auto-compiles AB's full week every Sunday at 8pm
  * Portfolio | RC Revenue | CC Sales | Training | Goal Velocity
@@ -10,14 +11,6 @@ const TOKEN = process.env.SLACK_BOT_TOKEN
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'
 const HEADERS = { Authorization: `Bearer ${process.env.JARVIS_SESSION_SECRET}` }
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export async function runWeeklyReview(): Promise<void> {
   const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)

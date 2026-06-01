@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Weekly Intention — Sunday evening prompt + carries through the week
  * One question: what's the one thing that makes everything else easier?
@@ -7,14 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string, channel = '#jarvis') {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel, text }),
-  })
-}
 
 export async function promptWeeklyIntention(): Promise<void> {
   const weekStart = getWeekStart()

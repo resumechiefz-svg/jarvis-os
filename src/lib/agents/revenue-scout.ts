@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Revenue Scout — ATLAS scans for profitable opportunities and brings a full plan
  * Monitors trends, AB's data, market signals
@@ -9,14 +10,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 interface Opportunity {
   title: string

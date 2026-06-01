@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * News Intelligence — filters financial/market news to only what's relevant to AB
  * Relevant: TradePilot holdings, card market, resume/job market, Charlotte business
@@ -10,14 +11,6 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 const NEWS_API_KEY = process.env.NEWS_API_KEY ?? ''
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 async function fetchNews(query: string): Promise<Array<{ title: string; description: string; url: string; source: string }>> {
   if (!NEWS_API_KEY) return []

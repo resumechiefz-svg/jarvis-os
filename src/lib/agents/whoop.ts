@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Whoop Integration — recovery, sleep, strain data
  * Whoop API v1: api.prod.whoop.com/developer/v1
@@ -11,14 +12,6 @@ const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth'
 const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token'
 const WHOOP_REDIRECT = process.env.WHOOP_REDIRECT_URI ?? 'https://jarvis-os-dusky.vercel.app/api/whoop/callback'
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export function getWhoopAuthUrl(): string {
   const params = new URLSearchParams({

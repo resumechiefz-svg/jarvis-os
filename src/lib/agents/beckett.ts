@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Beckett — AB's son, born June 2026, turns 5
  * Biweekly custody schedule wired into SAGE
@@ -7,14 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 // Beckett's key dates — update as needed
 export const BECKETT_DATA = {

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Auto-Blog Pipeline — ECHO monitors trends and drafts posts
  * ResumeChiefz: job market, resume tips, career advice
@@ -8,11 +9,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function slack(msg: string) {
-  const url = process.env.SLACK_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-}
 
 async function getTrendingTopics(brand: 'rc' | 'cc'): Promise<string[]> {
   // Pull trending Reddit topics

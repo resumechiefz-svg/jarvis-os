@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * YouTube Automation Pipeline — end-to-end video production
  * Phase 1: Script + scene breakdown with text overlay cards (Claude)
@@ -37,14 +38,6 @@ const VOICES = {
   resumechiefz: 'JBFqnCBsd6RMkjVDRZzb', // George — authoritative, recruiter
 }
 
-async function slack(text: string, channel = '#jarvis') {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel, text }),
-  })
-}
 
 // ── PHASE 1: Script + Scene Breakdown ─────────────────────────────────────
 

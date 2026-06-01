@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Daily Accountability Score — nightly 9pm Slack report
  * Scores AB's day across 5 dimensions, 1-10 each
@@ -7,11 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function slack(msg: string) {
-  const url = process.env.SLACK_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-}
 
 interface DayScore {
   trading: number; tradingNote: string

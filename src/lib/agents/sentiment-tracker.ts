@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Sentiment Tracker — reads AB's emotional patterns from conversations
  * Not invasive — just aware. Helps Jarvis read the room.
@@ -9,14 +10,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export interface SentimentReading {
   energy: 'high' | 'medium' | 'low'

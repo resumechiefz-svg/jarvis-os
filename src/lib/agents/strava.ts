@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Strava / Apple Health integration — auto-logs training data
  * Strava API: connects via OAuth
@@ -11,14 +12,6 @@ const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID ?? ''
 const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET ?? ''
 const STRAVA_REDIRECT = process.env.STRAVA_REDIRECT_URI ?? 'https://jarvis-os-dusky.vercel.app/api/strava/callback'
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export function getStravaAuthUrl(): string {
   const params = new URLSearchParams({

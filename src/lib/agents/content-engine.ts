@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Content Engine — automated faceless YouTube scripts + ebook generation
  * Two channels: Card Chiefz (hobby content) + ResumeChiefz (career content)
@@ -13,14 +14,6 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 // High-search, low-competition topics for each channel
 const YOUTUBE_TOPICS = {

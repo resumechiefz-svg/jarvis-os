@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * Pattern Interrupt — detects when the same problem surfaces 3x in 6 weeks
  * Jarvis names it directly. Most people never see their own loops.
@@ -8,14 +9,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 export async function detectPatterns(): Promise<void> {
   const sixWeeksAgo = new Date(Date.now() - 42 * 24 * 60 * 60 * 1000).toISOString()

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * eBay Auto-Relist — reprices and relists stale cards automatically
  * Cards unsold 30+ days get a 5-10% price drop and fresh listing
@@ -10,14 +11,6 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 const EBAY_TOKEN = process.env.EBAY_USER_TOKEN ?? ''
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#lister', text }),
-  })
-}
 
 async function getActiveListings(): Promise<Array<{ itemId: string; title: string; price: number; daysListed: number }>> {
   if (!EBAY_TOKEN) return []

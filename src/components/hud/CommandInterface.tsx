@@ -32,66 +32,19 @@ const QUICK_COMMANDS = [
 ]
 
 // ElevenLabs TTS — direct playback, no competing audio systems
-async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: number) => void, speakingRef?: React.MutableRefObject<boolean>): Promise<() => void> {
+// Fetch ElevenLabs audio — returns blob URL and audio element
+async function fetchSpeech(text: string, agent: string): Promise<HTMLAudioElement | null> {
   const res = await fetch('/api/speak', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, agent }),
   })
-  if (!res.ok) return () => {}
-
+  if (!res.ok) return null
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const audio = new Audio(url)
-
-  let animFrame = 0
-  let audioCtx: AudioContext | null = null
-
-  if (onAmplitude) {
-    try {
-      audioCtx = new AudioContext()
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 256
-      const source = audioCtx.createMediaElementSource(audio)
-      source.connect(analyser)
-      analyser.connect(audioCtx.destination)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-      const tick = () => {
-        analyser.getByteFrequencyData(dataArray)
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
-        onAmplitude(Math.min(1, avg / 80))
-        animFrame = requestAnimationFrame(tick)
-      }
-      audio.onplay = () => tick()
-    } catch { /* skip amplitude if AudioContext fails */ }
-  }
-
-  audio.onended = () => {
-    if (speakingRef) speakingRef.current = false
-    cancelAnimationFrame(animFrame)
-    onAmplitude?.(0)
-    URL.revokeObjectURL(url)
-    audioCtx?.close()
-  }
-
-  audio.onerror = () => {
-    if (speakingRef) speakingRef.current = false
-    cancelAnimationFrame(animFrame)
-    onAmplitude?.(0)
-  }
-
-  if (speakingRef) speakingRef.current = true
-  audio.play().catch(() => { if (speakingRef) speakingRef.current = false })
-
-  return () => {
-    if (speakingRef) speakingRef.current = false
-    audio.pause()
-    audio.currentTime = 0
-    cancelAnimationFrame(animFrame)
-    onAmplitude?.(0)
-    URL.revokeObjectURL(url)
-    audioCtx?.close()
-  }
+  audio.onended = () => URL.revokeObjectURL(url)
+  return audio
 }
 
 export default function CommandInterface({ onMessage, onAgentChange, onAmplitude, messages }: Props) {
@@ -110,11 +63,70 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const recognitionRef = useRef<any>(null)
   const stopSpeakRef = useRef<(() => void) | null>(null)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const jarvisSpeakingRef = useRef(false) // true while ElevenLabs audio plays
+  const startWakeWordListenerRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
+
+  // Speak — aborts mic, plays audio, restarts mic after with delay
+  const speak = useCallback(async (text: string, agent: string) => {
+    if (!voiceEnabled) return
+
+    // 1. Kill recognition immediately so it can't hear the speakers
+    if (recognitionRef.current) {
+      recognitionRef.current.abort()
+      recognitionRef.current = null
+    }
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
+
+    setSpeaking(true)
+    onAmplitude?.(0)
+
+    const audio = await fetchSpeech(text, agent)
+    if (!audio) { setSpeaking(false); return }
+
+    let animFrame = 0
+    let audioCtx: AudioContext | null = null
+    try {
+      audioCtx = new AudioContext()
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      const source = audioCtx.createMediaElementSource(audio)
+      source.connect(analyser)
+      analyser.connect(audioCtx.destination)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        analyser.getByteFrequencyData(data)
+        onAmplitude?.(Math.min(1, data.reduce((a, b) => a + b, 0) / data.length / 80))
+        animFrame = requestAnimationFrame(tick)
+      }
+      audio.onplay = () => tick()
+    } catch { /* no amplitude */ }
+
+    const done = () => {
+      cancelAnimationFrame(animFrame)
+      audioCtx?.close()
+      onAmplitude?.(0)
+      setSpeaking(false)
+      stopSpeakRef.current = null
+      // 2. Wait 600ms after audio ends before listening again — lets speakers go quiet
+      restartTimerRef.current = setTimeout(() => {
+        startWakeWordListenerRef.current?.()
+      }, 600)
+    }
+
+    audio.onended = done
+    audio.onerror = done
+
+    stopSpeakRef.current = () => {
+      audio.pause()
+      audio.currentTime = 0
+      done()
+    }
+
+    audio.play().catch(done)
+  }, [voiceEnabled, onAmplitude])
 
 
   const send = useCallback(async (text: string) => {
@@ -156,19 +168,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       onMessage(botMsg)
       setHistory(h => [...h, { role: 'assistant', content: reply }])
 
-      // Speak the response if voice is enabled
-      if (voiceEnabled) {
-        setSpeaking(true)
-        speakElevenLabs(reply, agent, onAmplitude, jarvisSpeakingRef).then(stopFn => {
-          stopSpeakRef.current = stopFn
-          const wordCount = reply.split(' ').length
-          const estimatedMs = (wordCount / 3) * 1000 + 1500
-          setTimeout(() => {
-            setSpeaking(false)
-            onAmplitude?.(0)
-          }, estimatedMs)
-        })
-      }
+      // Speak the response — mic is aborted during playback, restarts after
+      speak(reply, agent)
 
     } catch {
       onMessage({
@@ -209,7 +210,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       // Ignore everything while Jarvis is speaking — prevents self-loop
-      if (jarvisSpeakingRef.current) return
+      // Recognition is fully aborted while speaking — this is a safety net only
 
       // Check all alternatives for wake word — helps with mishearing
       let transcript = ''
@@ -253,6 +254,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
 
     recognitionRef.current = recognition
+    startWakeWordListenerRef.current = startWakeWordListener
     try { recognition.start() } catch { /* already started */ }
   }, []) // stable — uses sendRef for latest send
 
@@ -272,13 +274,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       const reply = data.text ?? 'Could not analyze image.'
       onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'vault', content: reply, timestamp: new Date() })
       onAgentChange('vault')
-      if (voiceEnabled) {
-        setSpeaking(true)
-        speakElevenLabs(reply, 'vault', onAmplitude, jarvisSpeakingRef).then(stop => {
-          stopSpeakRef.current = stop
-          setTimeout(() => { setSpeaking(false); onAmplitude?.(0) }, (reply.split(' ').length / 3) * 1000 + 1500)
-        })
-      }
+      speak(reply, 'vault')
     } catch {
       onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'jarvis', content: 'Vision error — check API.', timestamp: new Date() })
     } finally {

@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * RC Churn Prediction — flags users likely to cancel 7 days before they do
  * Analyzes: days since last login, resume downloads, subscription age, plan
@@ -7,11 +8,6 @@ import { supabaseAdmin } from '../supabase/client'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function slack(msg: string) {
-  const url = process.env.SLACK_WEBHOOK_URL
-  if (!url) return
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-}
 
 export interface ChurnRisk { userId: string; email: string; riskScore: number; reason: string; action: string }
 

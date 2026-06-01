@@ -1,3 +1,4 @@
+import { slack } from '../slack'
 /**
  * PSA Population Monitor — tracks grading population changes
  * High pop count = less rare = price pressure
@@ -9,14 +10,6 @@ import { supabaseAdmin } from '../supabase/client'
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const TOKEN = process.env.SLACK_BOT_TOKEN
 
-async function slack(text: string) {
-  if (!TOKEN) return
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: '#jarvis', text }),
-  })
-}
 
 // Cards to watch — add/remove as inventory changes
 const WATCHED_CARDS = [
