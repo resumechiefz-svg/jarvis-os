@@ -1,13 +1,23 @@
 /**
- * Apple Watch endpoint — ultra-light response for Watch complications
- * Returns a single-line status for Watch face display
- * Siri Shortcut on Watch → hits this → speaks the response
+ * Apple Watch endpoint — secured with WATCH_SECRET header
+ * Set WATCH_SECRET in env, add to iOS Shortcut as x-watch-key header
  */
 import { NextRequest, NextResponse } from 'next/server'
 
+const WATCH_SECRET = process.env.WATCH_SECRET ?? process.env.JARVIS_SESSION_SECRET ?? ''
+
+function isAuthorized(req: NextRequest): boolean {
+  const key = req.headers.get('x-watch-key') ?? req.nextUrl.searchParams.get('key') ?? ''
+  return key === WATCH_SECRET
+}
+
 export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const base = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'
-  const headers = { Authorization: `Bearer ${process.env.JARVIS_SESSION_SECRET ?? ''}` }
+  const headers = { Authorization: `Bearer ${WATCH_SECRET}` }
 
   const [portfolio, nova] = await Promise.all([
     fetch(`${base}/api/portfolio`, { headers }).then(r => r.json()).catch(() => null),
@@ -18,18 +28,19 @@ export async function GET(req: NextRequest) {
   const dayPL = portfolio?.dayPL ? `${portfolio.dayPL >= 0 ? '+' : ''}$${Math.round(portfolio.dayPL)}` : '--'
   const mrr = nova?.mrr ? `$${Math.round(nova.mrr)} MRR` : '--'
 
-  const status = `Portfolio ${equity} ${dayPL} today. RC ${mrr}.`
-
   return NextResponse.json({
-    status,
+    status: `Portfolio ${equity} ${dayPL} today. RC ${mrr}.`,
     equity: portfolio?.equity,
     dayPL: portfolio?.dayPL,
     mrr: nova?.mrr,
   })
 }
 
-// Siri on Watch sends a spoken command, returns spoken response
 export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { command } = await req.json().catch(() => ({ command: 'status' }))
   const base = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'
 
@@ -37,13 +48,12 @@ export async function POST(req: NextRequest) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.JARVIS_SESSION_SECRET ?? ''}`,
+      Authorization: `Bearer ${WATCH_SECRET}`,
     },
     body: JSON.stringify({ message: command, history: [] }),
   })
 
   const data = await res.json()
-  // Return short version for Watch TTS
   const reply = (data.message ?? '').split('.').slice(0, 2).join('. ') + '.'
   return NextResponse.json({ reply, full: data.message })
 }
