@@ -45,10 +45,13 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const messagesRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bargeInRef = useRef<any>(null)     // separate barge-in listener while Jarvis speaks
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bargeInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null)
-  const micMutedRef = useRef(false)       // true while Jarvis is talking — mic stays off
-  const voiceEnabledRef = useRef(true)    // mirror of voiceEnabled state for closures
+  const micMutedRef = useRef(false)
+  const voiceEnabledRef = useRef(true)
   const onAmplitudeRef = useRef(onAmplitude)
   const historyRef = useRef(history)
   const loadingRef = useRef(loading)
@@ -195,22 +198,80 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         audio.onended = () => { cancelAnimationFrame(animFrame); ctx.close() }
       } catch { /* no amplitude on this browser */ }
 
+      const stopBargeIn = () => {
+        if (bargeInTimerRef.current) { clearTimeout(bargeInTimerRef.current); bargeInTimerRef.current = null }
+        if (bargeInRef.current) { try { bargeInRef.current.abort() } catch { /* ok */ } bargeInRef.current = null }
+      }
+
       const cleanup = () => {
+        stopBargeIn()
         cancelAnimationFrame(animFrame)
         onAmplitudeRef.current?.(0)
         URL.revokeObjectURL(url)
         currentAudioRef.current = null
         setSpeaking(false)
-        // Unmute mic — wait 800ms for speakers to go quiet before listening again
         restartTimerRef.current = setTimeout(() => {
           micMutedRef.current = false
           startRecognition()
-        }, 800)
+        }, 500)
       }
 
       audio.onended = cleanup
       audio.onerror = cleanup
+
+      // Barge-in: start a second listener 1.5s into playback
+      // If user speaks → cut Jarvis off and process the command
+      const startBargeIn = () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = window as any
+        const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
+        if (!SR) return
+        const bi = new SR()
+        bi.lang = 'en-US'
+        bi.interimResults = false
+        bi.maxAlternatives = 1
+        bi.continuous = false
+        bargeInRef.current = bi
+
+        bi.onresult = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const t = e.results[0][0].transcript.toLowerCase().trim()
+          if (t.length < 2) return
+          // User interrupted — stop Jarvis immediately
+          audio.pause()
+          audio.currentTime = 0
+          cleanup()
+          // Process what they said
+          let cmd = t
+          for (const w of WAKE_WORDS) cmd = cmd.replace(w, '').trim()
+          if (cmd.length > 1) {
+            setTriggered(true)
+            setTimeout(() => setTriggered(false), 1500)
+            sendCommand(cmd)
+          } else {
+            micMutedRef.current = false
+            startRecognition()
+          }
+        }
+
+        bi.onend = () => {
+          bargeInRef.current = null
+          // Keep trying while audio still playing
+          if (currentAudioRef.current && !currentAudioRef.current.paused) {
+            bargeInTimerRef.current = setTimeout(startBargeIn, 200)
+          }
+        }
+        bi.onerror = () => {
+          bargeInRef.current = null
+          if (currentAudioRef.current && !currentAudioRef.current.paused) {
+            bargeInTimerRef.current = setTimeout(startBargeIn, 500)
+          }
+        }
+        try { bi.start() } catch { /* ok */ }
+      }
+
       audio.play().catch(cleanup)
+      // 1.5s delay — Jarvis's first words are past the mic by then
+      bargeInTimerRef.current = setTimeout(startBargeIn, 1500)
 
     } catch {
       setSpeaking(false)
