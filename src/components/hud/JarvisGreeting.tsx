@@ -29,28 +29,40 @@ export default function JarvisGreeting({ onSuggestionClick }: Props) {
 
     const greetAndBrief = async () => {
       try {
-        // 1. Get predictive suggestions
-        const sugRes = await fetch('/api/predictive')
-        const sugData = await sugRes.json()
-        setSuggestions(sugData.suggestions ?? [])
+        // 1. Get predictive suggestions (non-blocking)
+        fetch('/api/predictive').then(r => r.json()).then(d => setSuggestions(d.suggestions ?? [])).catch(() => {})
 
-        // 2. Get morning brief text
+        // 2. Check what's genuinely new since last greeting
+        const lastGreeting = sessionStorage.getItem('jarvis_last_greeting')
+        const lastGreetingTime = sessionStorage.getItem('jarvis_last_greeting_time')
+        const minutesSinceLast = lastGreetingTime
+          ? Math.floor((Date.now() - parseInt(lastGreetingTime)) / 60000)
+          : 9999
+
+        // Ask Jarvis to be human and contextual — not a robot report
+        const prompt = minutesSinceLast < 30
+          ? `AB just came back. Last time you said: "${lastGreeting ?? 'nothing'}". That was ${minutesSinceLast} minutes ago. Give a ONE sentence natural acknowledgment — vary it, be human, don't repeat yourself. Only mention something if it genuinely changed. Examples: "Back already?" or "Welcome back." or just nothing notable. Max 10 words. No portfolio recaps unless something actually changed significantly.`
+          : `AB just opened Jarvis. Time: ${getTimeOfDay()}. Give a ONE sentence warm, human, varied greeting. Do NOT give a stock/portfolio update unless there's something urgent (>2% move). Do NOT be robotic or repeat a template. Be natural — like a trusted colleague who knows him well. Examples: "Good to see you, AB." or "What are we working on?" or "Morning — anything urgent?" Max 12 words. Vary it every time.`
+
         const briefRes = await fetch('/api/jarvis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: 'Give me a 2-sentence status: portfolio P&L today, and one thing I should know right now. Be direct, no greetings.', history: [] }),
+          body: JSON.stringify({ message: prompt, history: [] }),
         })
         const briefData = await briefRes.json()
-        const briefText = briefData.message ?? ''
+        const greetingText = (briefData.message ?? '').split('.')[0].trim()
 
-        if (!briefText) return
+        if (!greetingText || greetingText.length < 3) return
 
-        // 3. Speak it via ElevenLabs
-        const greeting = `Good ${getTimeOfDay()}, AB. ${briefText}`
+        // Save so next greeting knows what was said
+        sessionStorage.setItem('jarvis_last_greeting', greetingText)
+        sessionStorage.setItem('jarvis_last_greeting_time', Date.now().toString())
+
+        // 3. Speak it
         const audioRes = await fetch('/api/speak', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: greeting, agent: 'jarvis' }),
+          body: JSON.stringify({ text: greetingText, agent: 'jarvis' }),
         })
 
         if (audioRes.ok) {
@@ -58,7 +70,6 @@ export default function JarvisGreeting({ onSuggestionClick }: Props) {
           const audioUrl = URL.createObjectURL(audioBlob)
           const audio = new Audio(audioUrl)
           audio.onended = () => URL.revokeObjectURL(audioUrl)
-          // Only play if AB isn't already speaking
           await voiceState.playAudio(audio)
         }
 
