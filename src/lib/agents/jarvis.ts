@@ -311,6 +311,22 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Voice-to-action: Full YouTube video pipeline ───────────
+  if (/(make|create|produce|generate|run) (a )?(full |complete )?(youtube )?video|full video pipeline|youtube pipeline/i.test(userMessage)) {
+    try {
+      const { runFullPipeline } = await import('./youtube-pipeline')
+      const channel = /card|chiefz|hobby/i.test(userMessage) ? 'cardchiefz' as const : 'resumechiefz' as const
+      const themeMatch = userMessage.match(/(?:theme|style)[:\s]+([a-z\s]+?)(?:\s|$)/i)
+      const theme = themeMatch?.[1]?.trim() ?? 'cinematic'
+      const topicMatch = userMessage.match(/(?:about|on|topic)[:\s]+(.+?)(?:\s+for|\s+using|$)/i)
+      const topic = topicMatch?.[1]?.trim()
+      runFullPipeline(channel, topic, theme).catch(() => {})
+      return { agent: 'echo' as AgentName, message: `Pipeline started, sir. I'll generate the script, images, voiceover, animation, and assemble the final video. You'll get updates in #jarvis as each phase completes. React ✅ when it's assembled and I'll upload it to YouTube automatically.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `Pipeline failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   // ── Voice-to-action: YouTube/ebook content ─────────────────
   if (/write (a )?(youtube|video) script|generate (a )?script|(make|create) (a )?(youtube|video)/i.test(userMessage)) {
     try {
