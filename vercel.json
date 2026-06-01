@@ -21,6 +21,16 @@
     { "path": "/api/accountability",  "schedule": "0 21 * * *"    },
     { "path": "/api/profile",         "schedule": "0 2 * * *"     },
     { "path": "/api/backup",          "schedule": "0 3 * * *"     },
-    { "path": "/api/memory/compress", "schedule": "0 4 * * 1"     }
+    { "path": "/api/memory/compress", "schedule": "0 4 * * 1"     },
+    { "path": "/api/pattern-interrupt",  "schedule": "0 10 * * 1"    },
+    { "path": "/api/revenue-scout",      "schedule": "0 7 * * 1,4"   },
+    { "path": "/api/sell-through",       "schedule": "0 11 * * 1"    },
+    { "path": "/api/rc-funnel",          "schedule": "0 9 * * 1"     },
+    { "path": "/api/content-engine",     "schedule": "0 8 * * 2,5"   },
+    { "path": "/api/morning-brief",      "schedule": "0 7 * * *"     },
+    { "path": "/api/habits",             "schedule": "0 20 * * *"    },
+    { "path": "/api/checkins",           "schedule": "0 9 * * *"     },
+    { "path": "/api/cc-email",           "schedule": "0 10 * * 2"    },
+    { "path": "/api/eod-debrief",        "schedule": "0 21 * * *"    }
   ]
 }

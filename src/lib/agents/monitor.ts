@@ -46,8 +46,24 @@ interface AlertPayload {
   action?: string
 }
 
+// Cooldown: don't fire the same alert more than once per 24 hours
+async function wasSentRecently(title: string, hours = 24): Promise<boolean> {
+  const since = new Date(Date.now() - hours * 3600 * 1000).toISOString()
+  const { data } = await supabaseAdmin
+    .from('ai_memories')
+    .select('id')
+    .eq('category', 'monitor_alert_sent')
+    .eq('content', title)
+    .gte('created_at', since)
+    .limit(1)
+  return (data?.length ?? 0) > 0
+}
+
 async function postSlack(channel: string, alert: AlertPayload): Promise<void> {
   if (!SLACK_BOT_TOKEN) return
+
+  // Dedup — skip if same alert already sent in the last 24h
+  if (await wasSentRecently(alert.title)) return
 
   const emoji = alert.level === 'critical' ? '🔴' : alert.level === 'warn' ? '🟡' : '🔵'
   const text = `${emoji} *[${alert.agent.toUpperCase()}] ${alert.title}*\n${alert.message}${alert.action ? `\n\n_Recommended action: ${alert.action}_` : ''}`
@@ -56,6 +72,15 @@ async function postSlack(channel: string, alert: AlertPayload): Promise<void> {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${SLACK_BOT_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ channel, text }),
+  })
+
+  // Record that this alert was sent
+  await supabaseAdmin.from('ai_memories').insert({
+    category: 'monitor_alert_sent',
+    content: alert.title,
+    context: JSON.stringify({ agent: alert.agent, level: alert.level }),
+    importance: 3,
+    created_at: new Date().toISOString(),
   })
 }
 

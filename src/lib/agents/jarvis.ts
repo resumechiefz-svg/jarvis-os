@@ -311,6 +311,40 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Voice-to-action: Habit logging ────────────────────────
+  if (/logged|mark(ed)?|done|finished|completed|did my/i.test(userMessage) && /habit|read|cold|plunge|meditat|journal|study|gratitude|phone/i.test(userMessage)) {
+    try {
+      const { logHabit, getDailyHabitStatus } = await import('./habit-tracker')
+      const habitMap: Record<string, string> = {
+        read: 'reading', reading: 'reading',
+        cold: 'cold_plunge', plunge: 'cold_plunge',
+        phone: 'no_phone_morning',
+        study: 'study', cert: 'study',
+        journal: 'gratitude', gratitude: 'gratitude', meditat: 'gratitude',
+      }
+      const lower = userMessage.toLowerCase()
+      const matched = Object.entries(habitMap).find(([k]) => lower.includes(k))
+      if (matched) {
+        await logHabit(matched[1])
+        const status = await getDailyHabitStatus()
+        return { agent: 'sage' as AgentName, message: `Logged. ${status.missing.length === 0 ? 'Clean sweep today — every habit done.' : `${status.completed.length} done, ${status.missing.length} left: ${status.missing.join(', ')}.`}` }
+      }
+    } catch { /* fall through */ }
+  }
+
+  // ── Voice-to-action: Habit status ─────────────────────────
+  if (/habit(s)?|streak(s)?|how.*doing.*habits/i.test(userMessage)) {
+    try {
+      const { getDailyHabitStatus } = await import('./habit-tracker')
+      const { completed, missing, streaks } = await getDailyHabitStatus()
+      const topStreak = Object.entries(streaks).sort(([,a],[,b]) => b - a)[0]
+      const msg = missing.length === 0
+        ? `All habits done today. ${topStreak ? `Best streak: ${topStreak[0]} at ${topStreak[1]} days.` : ''}`
+        : `${completed.length} done, ${missing.length} still open — ${missing.join(', ')}. ${topStreak ? `Best streak going: ${topStreak[0]} at ${topStreak[1]} days.` : ''}`
+      return { agent: 'sage' as AgentName, message: msg }
+    } catch { /* fall through */ }
+  }
+
   // ── Voice-to-action: Full YouTube video pipeline ───────────
   if (/(make|create|produce|generate|run) (a )?(full |complete )?(youtube )?video|full video pipeline|youtube pipeline/i.test(userMessage)) {
     try {
