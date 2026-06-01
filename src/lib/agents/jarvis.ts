@@ -4,7 +4,11 @@ import { loadRichMemory } from './memory-engine'
 import { supabaseAdmin } from '../supabase/client'
 import { searchMemories, saveMemory } from '../memory/vectors'
 import { loadProfile, rememberThis, isRememberIntent } from '../memory/profile'
+import { detectDirectAgentAddress, getAgentPersonalityPrompt } from './agent-personalities'
 import type { AgentName, JarvisResponse, Memory } from '../types'
+
+// ── Pending email drafts — waiting for "send" confirmation ───────────────────
+const pendingEmailDrafts = new Map<string, { subject: string; body: string; draftId: string; to: string }>()
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -120,6 +124,50 @@ function isOutreachIntent(msg: string): boolean {
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
+  const sessionKey = history.slice(-1)[0]?.content?.slice(0, 20) ?? 'default'
+
+  // ── Email send confirmation — "send it" / "yes send" ─────
+  if (/^(yes,?\s*)?(send|send it|go ahead|confirmed?|do it)\.?$/i.test(userMessage.trim())) {
+    const pending = pendingEmailDrafts.get(sessionKey) ?? [...pendingEmailDrafts.values()][0]
+    if (pending) {
+      try {
+        const { sendDraft } = await import('./gmail-draft')
+        await sendDraft(pending.draftId)
+        pendingEmailDrafts.clear()
+        return { agent: 'sage' as AgentName, message: `Sent. Email to ${pending.to} is gone — subject "${pending.subject}".` }
+      } catch {
+        return { agent: 'sage' as AgentName, message: 'Failed to send — check Gmail connection.' }
+      }
+    }
+  }
+
+  // ── Direct agent address — "Echo, what are you working on?" ─
+  const directAgent = detectDirectAgentAddress(userMessage)
+  if (directAgent) {
+    const strippedMessage = userMessage.replace(new RegExp(`^${directAgent}[,\\s]+`, 'i'), '').trim() || 'what are you working on?'
+    const agentSystemMap: Record<string, string> = {
+      jarvis: JARVIS_SYSTEM, nova: NOVA_SYSTEM, sage: SAGE_SYSTEM,
+      vault: VAULT_SYSTEM, echo: ECHO_SYSTEM, reel: REEL_SYSTEM,
+      scout: SCOUT_SYSTEM, lister: LISTER_SYSTEM, dex: DEX_SYSTEM,
+      beacon: BEACON_SYSTEM, ledger: LEDGER_SYSTEM, atlas: ATLAS_SYSTEM,
+    }
+    const baseSystem = agentSystemMap[directAgent] ?? JARVIS_SYSTEM
+    const personalityPrompt = getAgentPersonalityPrompt(directAgent)
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      system: baseSystem + personalityPrompt + `\n\nYou are being addressed directly. Respond in your own voice and personality. Stay in character completely.`,
+      messages: [
+        ...history.slice(-6).map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+        { role: 'user', content: strippedMessage },
+      ],
+    })
+
+    const message = response.content[0].type === 'text' ? response.content[0].text : ''
+    return { agent: directAgent as AgentName, message }
+  }
+
   // ── "Remember this" — explicit memory pinning ────────────
   if (isRememberIntent(userMessage)) {
     const content = userMessage.replace(/^(remember\s*(that|this|:)?|make a note|don't forget|keep in mind)\s*/i, '').trim()
@@ -220,14 +268,21 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
-  // ── Email draft ────────────────────────────────────────────
+  // ── Email draft — reads back before sending ───────────────
   if (/draft (an? )?email|write (an? )?email|email to|send (an? )?email to/i.test(userMessage)) {
     try {
       const { draftEmail } = await import('./gmail-draft')
       const toMatch = userMessage.match(/to\s+([^\s,]+@[^\s,]+|[\w\s]+?)(?:\s+about|\s+re:|\s+regarding|$)/i)
       const to = toMatch?.[1]?.trim() ?? 'unknown'
       const draft = await draftEmail({ to, context: userMessage, tone: 'professional' })
-      return { agent: 'sage' as AgentName, message: `Email drafted to ${to}, sir. Subject: "${draft.subject}". Posted to #jarvis for your approval — react ✅ to send.` }
+
+      // Store pending — waiting for "send" confirmation
+      pendingEmailDrafts.clear()
+      pendingEmailDrafts.set(sessionKey, { ...draft, to })
+
+      // Read it back so AB can hear it before confirming
+      const readback = `Here's what I've got, sir. To: ${to}. Subject: ${draft.subject}. ${draft.body.slice(0, 300)}. Want me to send it?`
+      return { agent: 'sage' as AgentName, message: readback }
     } catch (err) {
       return { agent: 'sage' as AgentName, message: `Email draft failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
     }
@@ -313,9 +368,9 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   // Only call sub-agents for relevant complex queries
   if (route !== 'jarvis' && AGENT_SYSTEMS[route] && usesSonnet) {
     const intel = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001', // Always Haiku for sub-agents
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 600,
-      system: AGENT_SYSTEMS[route] + context,
+      system: AGENT_SYSTEMS[route] + getAgentPersonalityPrompt(route) + context,
       messages: [{ role: 'user', content: userMessage }],
     }).then(r => r.content[0].type === 'text' ? r.content[0].text : '').catch(() => '')
 
@@ -323,8 +378,12 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     telemetryAgent = route
   }
 
-  const systemPrompt = JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + agentIntel +
-    (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
+  // When routing to a specific agent, let them speak in their own voice
+  const isDirectRoute = route !== 'jarvis' && agentIntel
+  const systemPrompt = isDirectRoute
+    ? (AGENT_SYSTEMS[route] ?? JARVIS_SYSTEM) + getAgentPersonalityPrompt(route) + context + profileCtx + beckettCtx + semanticCtx + liveData
+    : JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + agentIntel +
+      (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
     model,
