@@ -21,7 +21,7 @@ export default function Login() {
     })
 
     if (res.ok) {
-      router.push('/')
+      window.location.href = '/'
     } else {
       setError('Access denied.')
       setLoading(false)
