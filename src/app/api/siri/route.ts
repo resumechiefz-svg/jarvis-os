@@ -5,6 +5,8 @@
  */
 import { NextResponse } from 'next/server'
 export async function GET() {
-  // Redirect to mobile chat with voice auto-start param
-  return NextResponse.redirect(new URL('/?voice=1', process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'))
+  // Redirect to Jarvis with voice auto-start
+  // Middleware now allows this route publicly so it won't be blocked
+  const base = 'https://jarvis-os-dusky.vercel.app'
+  return NextResponse.redirect(`${base}/?voice=1`)
 }
