@@ -5,6 +5,7 @@
  * Also shows predictive suggestions
  */
 import { useEffect, useState, useRef } from 'react'
+import { voiceState } from '@/lib/voice-state'
 
 interface Suggestion {
   text: string
@@ -56,8 +57,9 @@ export default function JarvisGreeting({ onSuggestionClick }: Props) {
           const audioBlob = await audioRes.blob()
           const audioUrl = URL.createObjectURL(audioBlob)
           const audio = new Audio(audioUrl)
-          audio.play().catch(() => {}) // may be blocked by browser autoplay policy
           audio.onended = () => URL.revokeObjectURL(audioUrl)
+          // Only play if AB isn't already speaking
+          await voiceState.playAudio(audio)
         }
 
         setGreeted(true)

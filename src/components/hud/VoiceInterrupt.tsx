@@ -5,6 +5,7 @@
  * Runs in background on both desktop and mobile
  */
 import { useEffect, useRef } from 'react'
+import { voiceState } from '@/lib/voice-state'
 
 interface Props {
   onMessage?: (text: string) => void
@@ -44,8 +45,9 @@ export default function VoiceInterrupt({ onMessage }: Props) {
             const blob = await audioRes.blob()
             const url = URL.createObjectURL(blob)
             const audio = new Audio(url)
-            audio.play().catch(() => {})
             audio.onended = () => URL.revokeObjectURL(url)
+            // Respect AB — only interrupt if he's not speaking
+            await voiceState.playAudio(audio)
           }
 
           // Only speak one alert at a time

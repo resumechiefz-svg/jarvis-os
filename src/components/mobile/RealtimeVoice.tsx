@@ -6,6 +6,7 @@
  * Jarvis voice: "echo" — deep, professional
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { voiceState } from '@/lib/voice-state'
 
 type VoiceState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error'
 
@@ -64,13 +65,14 @@ export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, 
       const pc = new RTCPeerConnection()
       pcRef.current = pc
 
-      // Play Jarvis audio responses
+      // Play Jarvis audio responses — registered so speech detection can stop it
       pc.ontrack = e => {
         if (!audioRef.current) {
           audioRef.current = document.createElement('audio')
           audioRef.current.autoplay = true
         }
         audioRef.current.srcObject = e.streams[0]
+        voiceState.registerAudio(audioRef.current)
         set('speaking')
       }
 
@@ -97,7 +99,13 @@ Training for Whitewater 50 Mile ultra October 2026.
 Be direct, sharp, no fluff. You know his entire business context.
 Speak conversationally — short answers unless detail is requested.`,
             voice: 'echo',
-            turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 600 },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.4,           // Sensitive — detects speech quickly
+              silence_duration_ms: 1000, // Wait 1 full second of silence before responding
+              prefix_padding_ms: 300,    // Capture speech start cleanly
+              interrupt_response: true,  // Jarvis stops the moment AB starts talking
+            },
             input_audio_transcription: { model: 'whisper-1' },
           },
         }))
@@ -114,10 +122,14 @@ Speak conversationally — short answers unless detail is requested.`,
 
           switch (event.type) {
             case 'input_audio_buffer.speech_started':
+              // AB is speaking — kill all Jarvis audio immediately
+              voiceState.setUserSpeaking(true)
               set('listening')
               break
 
             case 'input_audio_buffer.speech_stopped':
+              // AB finished — Jarvis can respond
+              voiceState.setUserSpeaking(false)
               set('thinking')
               break
 
