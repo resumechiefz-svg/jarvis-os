@@ -344,11 +344,11 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         ))}
       </div>
 
-      {/* Realtime voice — always on, ambient dot shows state */}
+      {/* Realtime voice — inline, owns the mic button */}
       <Suspense fallback={null}>
         <RealtimeVoice
-          autoStart
-          hidden
+          hidden={false}
+          inlineButton
           onTranscript={(text, role, agent) => {
             const msg = { id: Date.now().toString(), role, agent: (agent ?? 'jarvis') as import('@/lib/types').AgentName, content: text, timestamp: new Date() }
             onMessage(msg)
@@ -397,20 +397,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           <span className="text-[9px] font-mono tracking-wider">FILE</span>
         </button>
 
-        {/* Mic button — green = always-on wake word mode, cyan flash = triggered */}
-        <button
-          onClick={toggleMic}
-          className={`px-3 border transition-colors ${
-            triggered
-              ? 'border-cyan-400 text-cyan-300 bg-cyan-900/40 animate-pulse'
-              : listening
-              ? 'border-green-500 text-green-400 bg-green-900/20'
-              : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
-          }`}
-          title={realtimeOpen ? 'Realtime voice active — mic handled by OpenAI Realtime' : listening ? 'Always-on: say "Hey Jarvis" — click to turn off' : 'Click to enable always-on voice'}
-        >
-          {listening ? <Mic size={14} /> : <MicOff size={14} />}
-        </button>
+        {/* Mic is handled by RealtimeVoice above — button rendered there */}
 
         {/* Stop speaking button — only shows when Jarvis is talking */}
         {speaking && (

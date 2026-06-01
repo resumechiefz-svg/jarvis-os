@@ -15,9 +15,10 @@ interface Props {
   onStateChange?: (state: VoiceState) => void
   autoStart?: boolean
   hidden?: boolean
+  inlineButton?: boolean  // compact HUD button style instead of full mobile button
 }
 
-export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, hidden }: Props) {
+export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, hidden, inlineButton }: Props) {
   const [state, setState] = useState<VoiceState>('idle')
   const [error, setError] = useState('')
   const [blockedBy, setBlockedBy] = useState<string | null>(null) // other device holding session
@@ -279,7 +280,34 @@ Speak conversationally — short answers unless detail is requested.`,
     )
   }
 
-  // Full button mode (desktop HUD)
+  // Inline HUD button — compact, fits in the input row
+  if (inlineButton) {
+    const borderColor = state === 'listening' ? '#00ff88' : state === 'speaking' ? '#a855f7' : state === 'thinking' || state === 'connecting' ? '#00d4ff' : state === 'error' ? '#ff4455' : 'rgba(0,212,255,0.3)'
+    const textColor = state === 'listening' ? '#00ff88' : state === 'speaking' ? '#a855f7' : state === 'thinking' || state === 'connecting' ? '#00d4ff' : state === 'error' ? '#ff4455' : 'rgba(0,212,255,0.6)'
+    const label = state === 'listening' ? 'LIVE' : state === 'speaking' ? 'SPEAKING' : state === 'thinking' ? 'THINKING' : state === 'connecting' ? 'CONNECTING' : state === 'error' ? 'RETRY' : 'MIC'
+    return (
+      <button
+        onClick={state === 'idle' || state === 'error' ? startSession : stopSession}
+        style={{
+          padding: '0 12px', height: '100%', minHeight: 36,
+          border: `1px solid ${borderColor}`,
+          background: state !== 'idle' ? `${borderColor}18` : 'rgba(0,0,0,0.4)',
+          color: textColor,
+          fontSize: 9, letterSpacing: '0.15em', fontFamily: 'monospace',
+          cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0,
+          animation: cfg.pulse ? 'mic-pulse 1.5s ease-in-out infinite' : 'none',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}
+        title={cfg.label}
+      >
+        <style>{`@keyframes mic-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
+        <span style={{ fontSize: 11 }}>{state === 'listening' ? '🎙️' : state === 'speaking' ? '🔊' : state === 'thinking' || state === 'connecting' ? '⟳' : state === 'error' ? '⚠️' : '🎙️'}</span>
+        <span>{label}</span>
+      </button>
+    )
+  }
+
+  // Full button mode (mobile)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       <button
