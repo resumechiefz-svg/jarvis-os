@@ -127,6 +127,39 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     return { agent: 'jarvis' as AgentName, message: `Locked in, sir. I'll carry "${content}" in every future conversation.` }
   }
 
+  // ── Create calendar event ────────────────────────────────
+  if (/schedule|add to (my )?calendar|create (an? )?event|book.*meeting|set (up )?a (call|meeting)/i.test(userMessage)) {
+    try {
+      const { createEvent } = await import('../google/calendar')
+      const { isConnected } = await import('../google/auth')
+      if (!await isConnected()) return { agent: 'sage' as AgentName, message: 'Google Calendar not connected yet, sir. Visit /api/google/auth to link it.' }
+      // Extract details with Claude
+      const extraction = await anthropic.messages.create({
+        model: 'claude-haiku-4-5', max_tokens: 150,
+        messages: [{ role: 'user', content: `Extract event details from: "${userMessage}"\nReturn JSON: {"title":"...","start":"ISO datetime","end":"ISO datetime","description":"..."}\nAssume today is ${new Date().toISOString()}. Default duration 1 hour.` }],
+      })
+      const text = extraction.content[0].type === 'text' ? extraction.content[0].text : '{}'
+      const match = text.match(/\{[\s\S]*\}/)
+      const event = match ? JSON.parse(match[0]) : null
+      if (!event?.title || !event?.start) return { agent: 'sage' as AgentName, message: "I need a title and time to create the event. Try: 'Schedule a call with X Thursday at 2pm'" }
+      const url = await createEvent(event)
+      return { agent: 'sage' as AgentName, message: `Done, sir. "${event.title}" added to your calendar.\n${url}` }
+    } catch (err) {
+      return { agent: 'sage' as AgentName, message: `Calendar event failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── Goal velocity ─────────────────────────────────────────
+  if (/goal velocity|on track|independence (age|by)|financial independence.*when|when.*financial independence|project.*million|million.*age/i.test(userMessage)) {
+    try {
+      const { calculateGoalVelocity } = await import('./goal-velocity')
+      const r = await calculateGoalVelocity()
+      return { agent: 'beacon' as AgentName, message: `${r.message}\n\nPortfolio: $${r.currentEquity.toLocaleString()} | RC MRR: $${r.currentMRR.toFixed(0)}\nProjected $1M: Age ${r.projectedMillionAge}. Full report posted to #jarvis.` }
+    } catch (err) {
+      return { agent: 'beacon' as AgentName, message: `Velocity calc failed: ${err instanceof Error ? err.message : 'Unknown'}` }
+    }
+  }
+
   // ── Blog post generation ──────────────────────────────────
   if (/write.*blog|blog.*post|auto.?blog|generate.*post for (rc|resumechiefz|card chiefz)/i.test(userMessage)) {
     try {

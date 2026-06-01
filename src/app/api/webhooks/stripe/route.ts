@@ -83,6 +83,10 @@ export async function POST(req: NextRequest) {
         const { subject, html } = paymentEmail(name, 'ResumeChiefz Pro', amount)
         await sendEmail(email, subject, html)
         await notifySlack(`💰 *RC Payment received* — ${email} paid ${amount}\nConfirmation email sent.`)
+        // Log revenue to Google Sheets
+        import('@/lib/google/sheets').then(({ logRevenue }) =>
+          logRevenue('ResumeChiefz', pi.amount / 100, 'subscription', email).catch(() => {})
+        ).catch(() => {})
         break
       }
 

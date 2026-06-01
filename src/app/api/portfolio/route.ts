@@ -4,6 +4,18 @@ import { getPortfolio, placeTrade, cancelAllOrders } from '@/lib/agents/tradepil
 export async function GET() {
   try {
     const portfolio = await getPortfolio()
+    // Wire to Google Sheets — log daily snapshot (async, non-blocking)
+    if (portfolio?.equity) {
+      import('@/lib/google/sheets').then(({ logPortfolioSnapshot }) =>
+        logPortfolioSnapshot({
+          equity: portfolio.equity,
+          dayPL: portfolio.dayPL ?? 0,
+          dayPLPct: portfolio.dayPLPct ?? 0,
+          cash: portfolio.cash ?? 0,
+          positions: portfolio.positions?.length ?? 0,
+        }).catch(() => {})
+      ).catch(() => {})
+    }
     return NextResponse.json(portfolio)
   } catch (err) {
     console.error('[Portfolio API]', err)
