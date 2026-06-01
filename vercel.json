@@ -32,6 +32,7 @@
     { "path": "/api/checkins",           "schedule": "0 9 * * *"     },
     { "path": "/api/cc-email",           "schedule": "0 10 * * 2"    },
     { "path": "/api/eod-debrief",        "schedule": "0 21 * * *"    },
-    { "path": "/api/competitor-intel",   "schedule": "0 7 * * 1"     }
+    { "path": "/api/competitor-intel",   "schedule": "0 7 * * 1"     },
+    { "path": "/api/forge",              "schedule": "0 6 * * 1"     }
   ]
 }

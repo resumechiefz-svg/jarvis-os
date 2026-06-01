@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { startBuild, getActiveBuild, getRecentBuilds } from '@/lib/agents/forge/builder'
+import { runForgeScsan, executeFix, getChangeLog } from '@/lib/agents/forge'
 
-// GET: active build status + recent builds
+// GET — run weekly scan (also triggered by cron)
 export async function GET() {
-  const active = getActiveBuild()
-  const recent = await getRecentBuilds()
-  return NextResponse.json({ active, recent })
+  runForgeScsan().catch(console.error)
+  return NextResponse.json({ ok: true, message: 'FORGE scan started — proposals in #jarvis' })
 }
 
-// POST: start a new build from an idea
+// POST — approve and deploy a proposal, or get change log
 export async function POST(req: NextRequest) {
-  const { idea } = await req.json()
-  if (!idea?.trim()) return NextResponse.json({ error: 'Describe what you want to build' }, { status: 400 })
+  const { action, proposalId, days } = await req.json()
 
-  try {
-    const job = await startBuild(idea.trim())
-    return NextResponse.json({
-      ok: true,
-      id: job.id,
-      message: `FORGE is on it. Speccing "${idea}" now — check #forge in Slack for progress.`,
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Build failed'
-    return NextResponse.json({ error: msg }, { status: 400 })
+  if (action === 'deploy' && proposalId) {
+    const result = await executeFix(proposalId)
+    return NextResponse.json(result)
   }
+
+  if (action === 'changelog') {
+    const log = await getChangeLog(days ?? 7)
+    return NextResponse.json({ log })
+  }
+
+  return NextResponse.json({ error: 'action required: deploy | changelog' }, { status: 400 })
 }

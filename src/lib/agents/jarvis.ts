@@ -311,6 +311,24 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Voice-to-action: FORGE self-improvement ───────────────
+  if (/what.*fix|what.*update|what.*change|forge.*scan|self.*(heal|improv|fix)|what.*you.*do.*today|update.*yourself|fix.*yourself/i.test(userMessage)) {
+    try {
+      const { getChangeLog } = await import('./forge')
+      const days = /week/i.test(userMessage) ? 7 : /month/i.test(userMessage) ? 30 : 7
+      const log = await getChangeLog(days)
+      return { agent: 'jarvis' as AgentName, message: log }
+    } catch { /* fall through */ }
+  }
+
+  if (/what.*need.*fix|what.*broken|what.*recommend|run.*forge|scan.*yourself|find.*issues|diagnose/i.test(userMessage)) {
+    try {
+      const { runForgeScsan } = await import('./forge')
+      runForgeScsan().catch(() => {})
+      return { agent: 'atlas' as AgentName, message: `Running a full system scan now. I'll check error logs, agent failures, and conversation patterns for anything that needs fixing. Results in #jarvis in a couple minutes.` }
+    } catch { /* fall through */ }
+  }
+
   // ── Voice-to-action: Post pending eBay draft ──────────────
   if (/post it|list it|go ahead.*list|post.*draft|list.*draft/i.test(userMessage)) {
     try {
