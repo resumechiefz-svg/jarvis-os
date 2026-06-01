@@ -5,10 +5,9 @@ import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
 import type { Message, AgentName } from '@/lib/types'
 
 const AGENT_COLORS: Record<string, string> = {
-  jarvis: '#00d4ff',
-  nova: '#a855f7',
-  sage: '#00ff88',
-  vault: '#c9a84c',
+  jarvis: '#00d4ff', nova: '#a855f7', sage: '#00ff88', vault: '#c9a84c',
+  echo: '#ff6b35', scout: '#ff4455', reel: '#ff69b4', lister: '#fbbf24',
+  dex: '#60a5fa', beacon: '#34d399', ledger: '#f87171', atlas: '#e879f9',
 }
 
 interface Props {
@@ -19,33 +18,17 @@ interface Props {
 }
 
 const QUICK_COMMANDS = [
-  { label: 'Morning Brief', command: 'Hey Jarvis, morning brief' },
-  { label: 'RC Stats', command: 'Nova, give me the ResumeChiefz numbers' },
-  { label: 'Beckett', command: 'Sage, Beckett status this week' },
-  { label: 'CC Sales', command: 'Vault, how did Card Chiefz do this week?' },
-  { label: 'Goals', command: 'Beacon, weekly accountability check' },
-  { label: 'Money', command: 'Ledger, give me my financial snapshot' },
-  { label: 'Strategy', command: 'Atlas, where am I on the 7-figure roadmap?' },
-  { label: 'End of Day', command: 'Jarvis, let\'s debrief' },
-  { label: 'New Ideas', command: 'Atlas, give me 3 business ideas I should build next' },
-  { label: 'RC Acquisition', command: 'Atlas, how close is ResumeChiefz to being acquisition-ready?' },
+  { label: 'Morning Brief', command: 'morning brief' },
+  { label: 'RC Stats', command: 'Nova give me the ResumeChiefz numbers' },
+  { label: 'CC Sales', command: 'Vault how did Card Chiefz do this week' },
+  { label: 'Goals', command: 'Beacon weekly accountability check' },
+  { label: 'Money', command: 'Ledger give me my financial snapshot' },
+  { label: 'Strategy', command: 'Atlas where am I on the 7-figure roadmap' },
+  { label: 'End of Day', command: 'lets debrief' },
+  { label: 'Ideas', command: 'Atlas give me 3 business ideas I should build next' },
 ]
 
-// ElevenLabs TTS — direct playback, no competing audio systems
-// Fetch ElevenLabs audio — returns blob URL and audio element
-async function fetchSpeech(text: string, agent: string): Promise<HTMLAudioElement | null> {
-  const res = await fetch('/api/speak', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, agent }),
-  })
-  if (!res.ok) return null
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const audio = new Audio(url)
-  audio.onended = () => URL.revokeObjectURL(url)
-  return audio
-}
+const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey travis', 'hey garcia', 'hey davis']
 
 export default function CommandInterface({ onMessage, onAgentChange, onAmplitude, messages }: Props) {
   const [input, setInput] = useState('')
@@ -56,94 +39,198 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
+
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
-  const stopSpeakRef = useRef<(() => void) | null>(null)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const startWakeWordListenerRef = useRef<(() => void) | null>(null)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const micMutedRef = useRef(false)       // true while Jarvis is talking — mic stays off
+  const voiceEnabledRef = useRef(true)    // mirror of voiceEnabled state for closures
+  const onAmplitudeRef = useRef(onAmplitude)
+  const historyRef = useRef(history)
+  const loadingRef = useRef(loading)
+
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled }, [voiceEnabled])
+  useEffect(() => { onAmplitudeRef.current = onAmplitude }, [onAmplitude])
+  useEffect(() => { historyRef.current = history }, [history])
+  useEffect(() => { loadingRef.current = loading }, [loading])
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
-  // Speak — aborts mic, plays audio, restarts mic after with delay
-  const speak = useCallback(async (text: string, agent: string) => {
-    if (!voiceEnabled) return
+  // ── Mic control ──────────────────────────────────────────────────────────────
 
-    // 1. Kill recognition immediately so it can't hear the speakers
+  const stopRecognition = useCallback(() => {
     if (recognitionRef.current) {
       recognitionRef.current.abort()
       recognitionRef.current = null
     }
-    if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+    setListening(false)
+  }, [])
+
+  const startRecognition = useCallback(() => {
+    if (micMutedRef.current) return          // Jarvis is speaking — stay silent
+    if (recognitionRef.current) return       // already running
+
+    const w = window as any // eslint-disable-line @typescript-eslint/no-explicit-any
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
+    if (!SR) return
+
+    const recognition = new SR()
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 3
+    recognition.continuous = false
+
+    recognition.onstart = () => setListening(true)
+
+    recognition.onresult = (event: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (micMutedRef.current) return        // safety net — discard if Jarvis just started
+
+      let transcript = ''
+      for (let i = 0; i < event.results[0].length; i++) {
+        const t = event.results[0][i].transcript.toLowerCase().trim()
+        if (WAKE_WORDS.some(w => t.includes(w))) { transcript = t; break }
+        if (!transcript) transcript = t
+      }
+
+      const wakeDetected = WAKE_WORDS.some(w => transcript.includes(w))
+
+      if (wakeDetected) {
+        let command = transcript
+        for (const w of WAKE_WORDS) command = command.replace(w, '').trim()
+        setTriggered(true)
+        setTimeout(() => setTriggered(false), 2000)
+        sendCommand(command.length > 1 ? command : 'hey')
+      } else if (transcript.length > 2) {
+        sendCommand(transcript)
+      }
+    }
+
+    recognition.onend = () => {
+      recognitionRef.current = null
+      setListening(false)
+      if (!micMutedRef.current) {
+        restartTimerRef.current = setTimeout(startRecognition, 300)
+      }
+    }
+
+    recognition.onerror = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      recognitionRef.current = null
+      if (e.error !== 'no-speech' && e.error !== 'aborted') setListening(false)
+      if (!micMutedRef.current) {
+        restartTimerRef.current = setTimeout(startRecognition, 1000)
+      }
+    }
+
+    recognitionRef.current = recognition
+    try { recognition.start() } catch { recognitionRef.current = null }
+  }, []) // stable — reads state via refs
+
+  // Auto-start on mount
+  useEffect(() => {
+    startRecognition()
+    return () => {
+      stopRecognition()
+      micMutedRef.current = false
+    }
+  }, [startRecognition, stopRecognition])
+
+  // ── Speech output ─────────────────────────────────────────────────────────────
+
+  const speak = useCallback(async (text: string, agent: string) => {
+    if (!voiceEnabledRef.current) return
+
+    // Stop mic immediately — must happen before audio plays
+    micMutedRef.current = true
+    stopRecognition()
+
+    // Stop any currently playing audio
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
 
     setSpeaking(true)
-    onAmplitude?.(0)
 
-    const audio = await fetchSpeech(text, agent)
-    if (!audio) { setSpeaking(false); return }
-
-    let animFrame = 0
-    let audioCtx: AudioContext | null = null
     try {
-      audioCtx = new AudioContext()
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 256
-      const source = audioCtx.createMediaElementSource(audio)
-      source.connect(analyser)
-      analyser.connect(audioCtx.destination)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-      const tick = () => {
-        analyser.getByteFrequencyData(data)
-        onAmplitude?.(Math.min(1, data.reduce((a, b) => a + b, 0) / data.length / 80))
-        animFrame = requestAnimationFrame(tick)
+      const res = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, agent }),
+      })
+      if (!res.ok) throw new Error('speak failed')
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudioRef.current = audio
+
+      // Amplitude analysis for orb animation
+      let animFrame = 0
+      try {
+        const ctx = new AudioContext()
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        const source = ctx.createMediaElementSource(audio)
+        source.connect(analyser)
+        analyser.connect(ctx.destination)
+        const data = new Uint8Array(analyser.frequencyBinCount)
+        audio.onplay = () => {
+          const tick = () => {
+            analyser.getByteFrequencyData(data)
+            onAmplitudeRef.current?.(Math.min(1, data.reduce((a, b) => a + b, 0) / data.length / 80))
+            animFrame = requestAnimationFrame(tick)
+          }
+          tick()
+        }
+        audio.onended = () => { cancelAnimationFrame(animFrame); ctx.close() }
+      } catch { /* no amplitude on this browser */ }
+
+      const cleanup = () => {
+        cancelAnimationFrame(animFrame)
+        onAmplitudeRef.current?.(0)
+        URL.revokeObjectURL(url)
+        currentAudioRef.current = null
+        setSpeaking(false)
+        // Unmute mic — wait 800ms for speakers to go quiet before listening again
+        restartTimerRef.current = setTimeout(() => {
+          micMutedRef.current = false
+          startRecognition()
+        }, 800)
       }
-      audio.onplay = () => tick()
-    } catch { /* no amplitude */ }
 
-    const done = () => {
-      cancelAnimationFrame(animFrame)
-      audioCtx?.close()
-      onAmplitude?.(0)
+      audio.onended = cleanup
+      audio.onerror = cleanup
+      audio.play().catch(cleanup)
+
+    } catch {
       setSpeaking(false)
-      stopSpeakRef.current = null
-      // 2. Wait 600ms after audio ends before listening again — lets speakers go quiet
-      restartTimerRef.current = setTimeout(() => {
-        startWakeWordListenerRef.current?.()
-      }, 600)
+      micMutedRef.current = false
+      startRecognition()
     }
+  }, [startRecognition, stopRecognition])
 
-    audio.onended = done
-    audio.onerror = done
+  // ── Send command ──────────────────────────────────────────────────────────────
 
-    stopSpeakRef.current = () => {
-      audio.pause()
-      audio.currentTime = 0
-      done()
-    }
+  const sendCommand = useCallback(async (text: string) => {
+    if (!text.trim() || loadingRef.current) return
 
-    audio.play().catch(done)
-  }, [voiceEnabled, onAmplitude])
-
-
-  const send = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return
     setInput('')
     setLoading(true)
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      agent: 'jarvis',
-      content: text,
-      timestamp: new Date(),
-    }
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', agent: 'jarvis', content: text, timestamp: new Date() }
     onMessage(userMsg)
 
-    const newHistory = [...history, { role: 'user' as const, content: text }]
+    const newHistory = [...historyRef.current, { role: 'user' as const, content: text }]
     setHistory(newHistory)
 
     try {
@@ -155,183 +242,79 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       const data = await res.json()
       const agent: AgentName = data.agent ?? 'jarvis'
       onAgentChange(agent)
-
       const reply = data.message ?? data.error ?? 'No response.'
-
-      const botMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        agent,
-        content: reply,
-        timestamp: new Date(),
-      }
+      const botMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', agent, content: reply, timestamp: new Date() }
       onMessage(botMsg)
       setHistory(h => [...h, { role: 'assistant', content: reply }])
-
-      // Speak the response — mic is aborted during playback, restarts after
       speak(reply, agent)
-
     } catch {
-      onMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        agent: 'jarvis',
-        content: 'Connection error. Check API configuration.',
-        timestamp: new Date(),
-      })
+      onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: 'Connection error.', timestamp: new Date() })
     } finally {
       setLoading(false)
       onAgentChange('jarvis')
     }
-  }, [loading, history, voiceEnabled, onMessage, onAgentChange])
+  }, [onMessage, onAgentChange, speak])
 
-  const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey travis', 'hey garcia'] // fallback mishears
+  // send for text input (goes through same path)
+  const send = useCallback((text: string) => sendCommand(text), [sendCommand])
 
-  // Use a ref for send so the recognition callback always has the latest version
-  const sendRef = useRef(send)
-  useEffect(() => { sendRef.current = send }, [send])
-
-  const startWakeWordListener = useCallback(() => {
-    if (typeof window === 'undefined') return
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any
-    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
-    if (!SR) return
-
-    const recognition = new SR()
-    recognition.lang = 'en-US'
-    recognition.interimResults = false
-    recognition.maxAlternatives = 3  // more alternatives = better wake word matching
-    recognition.continuous = false
-
-    recognition.onstart = () => setListening(true)
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      // Ignore everything while Jarvis is speaking — prevents self-loop
-      // Recognition is fully aborted while speaking — this is a safety net only
-
-      // Check all alternatives for wake word — helps with mishearing
-      let transcript = ''
-      for (let i = 0; i < event.results[0].length; i++) {
-        transcript = event.results[0][i].transcript.toLowerCase().trim()
-        if (WAKE_WORDS.some(w => transcript.includes(w))) break
-      }
-
-      const wakeDetected = WAKE_WORDS.some(w => transcript.includes(w))
-
-      if (wakeDetected) {
-        stopSpeakRef.current?.()
-        stopSpeakRef.current = null
-        setSpeaking(false)
-
-        let command = transcript
-        for (const w of WAKE_WORDS) command = command.replace(w, '').trim()
-
-        setTriggered(true)
-        setTimeout(() => setTriggered(false), 2000)
-
-        // Send command if there is one, otherwise send empty string to trigger greeting
-        sendRef.current(command.length > 1 ? command : 'hey')
-      } else if (transcript.length > 1) {
-        sendRef.current(transcript)
-      }
-    }
-
-    recognition.onend = () => {
-      restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) startWakeWordListener()
-      }, 300)
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onerror = (e: any) => {
-      if (e.error !== 'no-speech' && e.error !== 'aborted') setListening(false)
-      restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) startWakeWordListener()
-      }, 1000)
-    }
-
-    recognitionRef.current = recognition
-    startWakeWordListenerRef.current = startWakeWordListener
-    try { recognition.start() } catch { /* already started */ }
-  }, []) // stable — uses sendRef for latest send
+  // ── Image upload ──────────────────────────────────────────────────────────────
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!file || analyzingImage) return
     setAnalyzingImage(true)
-
     onMessage({ id: Date.now().toString(), role: 'user', agent: 'jarvis', content: `[Image: ${file.name}]`, timestamp: new Date() })
-
     const formData = new FormData()
     formData.append('image', file)
     formData.append('context', input.trim() || '')
-
     try {
       const res = await fetch('/api/vision', { method: 'POST', body: formData })
       const data = await res.json()
       const reply = data.text ?? 'Could not analyze image.'
-      onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'vault', content: reply, timestamp: new Date() })
+      onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'vault', content: reply, timestamp: new Date() })
       onAgentChange('vault')
       speak(reply, 'vault')
     } catch {
-      onMessage({ id: (Date.now()+1).toString(), role: 'assistant', agent: 'jarvis', content: 'Vision error — check API.', timestamp: new Date() })
+      onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: 'Vision error.', timestamp: new Date() })
     } finally {
       setAnalyzingImage(false)
       setInput('')
     }
-  }, [analyzingImage, input, onMessage, onAgentChange, voiceEnabled, onAmplitude])
-
-  // Auto-start wake word listener on mount — this is the primary voice INPUT path
-  // It sends speech → send() → ElevenLabs TTS. No conflict with Realtime button.
-  useEffect(() => {
-    startWakeWordListener()
-    return () => {
-      recognitionRef.current = null
-      if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [analyzingImage, input, onMessage, onAgentChange, speak])
 
   const toggleMic = useCallback(() => {
     if (listening) {
-      recognitionRef.current = null
-      if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
-      setListening(false)
+      stopRecognition()
+      micMutedRef.current = true // manual off
     } else {
-      startWakeWordListener()
+      micMutedRef.current = false
+      startRecognition()
     }
-  }, [listening, startWakeWordListener])
+  }, [listening, startRecognition, stopRecognition])
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="command-interface flex flex-col h-full">
-      {/* Message history */}
       <div ref={messagesRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
         {messages.length === 0 && !loading && (
           <div className="flex items-center gap-3 py-1 select-none">
             <div className="text-[11px] text-cyan-500/30 tracking-widest uppercase">AB Command Center</div>
-            <div className="text-[11px] text-white/10 tracking-widest">NOVA ● SAGE ● VAULT ● ECHO ● ATLAS ● 12 AGENTS ONLINE</div>
+            <div className="text-[11px] text-white/10 tracking-widest">NOVA ● SAGE ● VAULT ● ECHO ● ATLAS ● 13 AGENTS ONLINE</div>
           </div>
         )}
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             {msg.role === 'assistant' && (
-              <div
-                className="text-[11px] font-bold tracking-wider shrink-0 pt-1"
-                style={{ color: AGENT_COLORS[msg.agent] ?? '#00d4ff' }}
-              >
+              <div className="text-[11px] font-bold tracking-wider shrink-0 pt-1" style={{ color: AGENT_COLORS[msg.agent] ?? '#00d4ff' }}>
                 [{msg.agent.toUpperCase()}]
               </div>
             )}
             <div
-              className={`text-[11px] leading-relaxed max-w-[75%] px-3 py-1.5 rounded ${
-                msg.role === 'user'
-                  ? 'bg-cyan-900/30 text-cyan-200 text-right'
-                  : 'bg-white/5 text-white/80'
-              }`}
+              className={`text-[12px] leading-relaxed max-w-[75%] px-3 py-1.5 rounded ${msg.role === 'user' ? 'bg-cyan-900/30 text-cyan-200 text-right' : 'bg-white/5 text-white/80'}`}
               style={msg.role === 'assistant' ? { borderLeft: `2px solid ${AGENT_COLORS[msg.agent] ?? '#00d4ff'}` } : {}}
             >
-              <pre className="whitespace-pre-wrap font-mono text-[11px]">{msg.content}</pre>
+              <pre className="whitespace-pre-wrap font-mono text-[12px]">{msg.content}</pre>
             </div>
           </div>
         ))}
@@ -350,109 +333,62 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       {/* Quick commands */}
       <div className="px-4 py-1.5 flex gap-2 flex-wrap">
         {QUICK_COMMANDS.map(qc => (
-          <button
-            key={qc.label}
-            onClick={() => send(qc.command)}
-            className="text-[11px] tracking-wider px-2 py-0.5 border border-cyan-900/50 text-cyan-500/60 hover:text-cyan-300 hover:border-cyan-600 transition-colors uppercase"
-          >
+          <button key={qc.label} onClick={() => send(qc.command)}
+            className="text-[10px] tracking-wider px-2 py-0.5 border border-cyan-900/50 text-cyan-500/60 hover:text-cyan-300 hover:border-cyan-600 transition-colors uppercase">
             {qc.label}
           </button>
         ))}
       </div>
 
-      {/* Hidden file input — images, PDFs, docs */}
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*,.pdf,.doc,.docx,.txt,.csv"
-        className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = '' }}
-      />
+      {/* Hidden file input */}
+      <input ref={imageInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = '' }} />
 
       {/* Input row */}
       <div className="px-4 pb-3 flex gap-2 items-stretch">
         <div className="flex-1 flex items-center border border-cyan-800/50 bg-black/40 px-3">
-          <span className="text-cyan-500/50 text-[12px] mr-2 font-mono">{'>'}</span>
+          <span className="text-cyan-500/50 text-[11px] mr-2 font-mono">{'>'}</span>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send(input)}
-            placeholder={listening ? 'Listening...' : 'Say anything to Jarvis...'}
-            className="flex-1 bg-transparent text-[13px] text-cyan-200 placeholder:text-cyan-800 outline-none font-mono py-2"
+            placeholder={listening ? '🎙 Listening for "Hey Jarvis"...' : 'Type or say "Hey Jarvis"...'}
+            className="flex-1 bg-transparent text-[13px] text-cyan-200 placeholder:text-cyan-800/60 outline-none font-mono py-2"
             disabled={loading}
             autoFocus
           />
         </div>
 
-        {/* File / photo upload */}
-        <button
-          onClick={() => imageInputRef.current?.click()}
-          disabled={analyzingImage}
-          className={`px-3 border transition-colors flex items-center gap-1.5 ${
-            analyzingImage
-              ? 'border-yellow-500/70 text-yellow-400 bg-yellow-900/20 animate-pulse'
-              : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
-          }`}
-          title="Upload photo, PDF, or doc — card pricing, chart analysis, resume review"
-        >
+        <button onClick={() => imageInputRef.current?.click()} disabled={analyzingImage}
+          className={`px-3 border transition-colors flex items-center gap-1.5 ${analyzingImage ? 'border-yellow-500/70 text-yellow-400 bg-yellow-900/20 animate-pulse' : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'}`}
+          title="Upload photo, PDF, or doc">
           <Camera size={14} />
-          <span className="text-[11px] font-mono tracking-wider">FILE</span>
+          <span className="text-[10px] font-mono tracking-wider">FILE</span>
         </button>
 
-        {/* Stop speaking button — only shows when Jarvis is talking */}
         {speaking && (
-          <button
-            onClick={() => {
-              stopSpeakRef.current?.()
-              stopSpeakRef.current = null
-              setSpeaking(false)
-            }}
-            className="px-3 border border-red-500/70 text-red-400 bg-red-900/20 animate-pulse transition-colors hover:bg-red-900/40"
-            title="Stop Jarvis"
-          >
+          <button onClick={() => { currentAudioRef.current?.pause(); currentAudioRef.current = null; setSpeaking(false); micMutedRef.current = false; startRecognition() }}
+            className="px-3 border border-red-500/70 text-red-400 bg-red-900/20 animate-pulse transition-colors"
+            title="Stop Jarvis">
             <Square size={14} />
           </button>
         )}
 
-        {/* Voice output toggle */}
-        <button
-          onClick={() => {
-            setVoiceEnabled(v => !v)
-            stopSpeakRef.current?.()
-            stopSpeakRef.current = null
-            setSpeaking(false)
-          }}
-          className={`px-3 border transition-colors ${
-            voiceEnabled
-              ? 'border-cyan-700/50 text-cyan-400 bg-black/40 hover:border-cyan-500'
-              : 'border-white/10 text-white/20 bg-black/40'
-          }`}
-          title={voiceEnabled ? 'Mute Jarvis' : 'Unmute Jarvis'}
-        >
+        <button onClick={() => { setVoiceEnabled(v => !v); voiceEnabledRef.current = !voiceEnabledRef.current }}
+          className={`px-3 border transition-colors ${voiceEnabled ? 'border-cyan-700/50 text-cyan-400 bg-black/40' : 'border-white/10 text-white/20 bg-black/40'}`}
+          title={voiceEnabled ? 'Mute Jarvis' : 'Unmute Jarvis'}>
           {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
         </button>
 
-        {/* Mic toggle — controls wake word listener */}
-        <button
-          onClick={toggleMic}
-          className={`px-3 border transition-colors ${
-            triggered
-              ? 'border-cyan-300 text-cyan-200 bg-cyan-900/50 animate-pulse'
-              : listening
-              ? 'border-green-500 text-green-400 bg-green-900/20'
-              : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
-          }`}
-          title={listening ? 'Listening for "Hey Jarvis" — click to pause' : 'Click to enable voice'}
-        >
+        <button onClick={toggleMic}
+          className={`px-3 border transition-colors ${triggered ? 'border-cyan-300 text-cyan-200 bg-cyan-900/50 animate-pulse' : listening ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 bg-black/40'}`}
+          title={listening ? 'Mic on — say "Hey Jarvis"' : 'Mic off'}>
           {listening ? <Mic size={14} /> : <MicOff size={14} />}
         </button>
 
-        <button
-          onClick={() => send(input)}
-          disabled={loading || !input.trim()}
-          className="px-4 text-[12px] font-bold tracking-widest bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 hover:bg-cyan-800/40 disabled:opacity-30 transition-colors uppercase"
-        >
+        <button onClick={() => send(input)} disabled={loading || !input.trim()}
+          className="px-4 text-[12px] font-bold tracking-widest bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 hover:bg-cyan-800/40 disabled:opacity-30 transition-colors uppercase">
           Send
         </button>
       </div>
