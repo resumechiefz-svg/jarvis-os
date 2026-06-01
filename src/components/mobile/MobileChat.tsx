@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 const RealtimeVoice = lazy(() => import('./RealtimeVoice'))
+const JarvisGreeting = lazy(() => import('@/components/hud/JarvisGreeting'))
+const VoiceInterrupt = lazy(() => import('@/components/hud/VoiceInterrupt'))
 
 interface Message {
   role: 'user' | 'assistant'
@@ -124,6 +126,16 @@ export default function MobileChat() {
           <span style={{ fontSize: 9, color: 'rgba(0,255,136,0.6)', letterSpacing: '0.1em' }}>ONLINE</span>
         </div>
       </div>
+
+      {/* Voice interrupt — speaks proactive alerts out loud */}
+      <Suspense fallback={null}>
+        <VoiceInterrupt onMessage={text => setMessages(m => [...m, { role: 'assistant', content: text, agent: 'jarvis', ts: new Date() }])} />
+      </Suspense>
+
+      {/* Jarvis greeting — speaks first on open, shows predictive chips */}
+      <Suspense fallback={null}>
+        <JarvisGreeting onSuggestionClick={text => send(text)} />
+      </Suspense>
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
