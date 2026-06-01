@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import type { VaultStats, SageBrief } from '@/lib/types'
 import type { PhantomStats } from '@/lib/agents/phantom'
+const FinancialIndependenceDashboard = dynamic(() => import('./FinancialIndependenceDashboard'), { ssr: false })
 
 function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -112,6 +114,11 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
           <div className="text-[15px] font-bold tracking-[0.3em]" style={{ color: '#00d4ff', textShadow: '0 0 16px #00d4ff50' }}>
             {activeAgent.toUpperCase()}
           </div>
+        </div>
+
+        {/* Financial Independence Dashboard — fills empty space */}
+        <div className="col-span-2 mt-1">
+          <FinancialIndependenceDashboard />
         </div>
 
       </div>
