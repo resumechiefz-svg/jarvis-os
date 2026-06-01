@@ -220,6 +220,30 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Email draft ────────────────────────────────────────────
+  if (/draft (an? )?email|write (an? )?email|email to|send (an? )?email to/i.test(userMessage)) {
+    try {
+      const { draftEmail } = await import('./gmail-draft')
+      const toMatch = userMessage.match(/to\s+([^\s,]+@[^\s,]+|[\w\s]+?)(?:\s+about|\s+re:|\s+regarding|$)/i)
+      const to = toMatch?.[1]?.trim() ?? 'unknown'
+      const draft = await draftEmail({ to, context: userMessage, tone: 'professional' })
+      return { agent: 'sage' as AgentName, message: `Email drafted to ${to}, sir. Subject: "${draft.subject}". Posted to #jarvis for your approval — react ✅ to send.` }
+    } catch (err) {
+      return { agent: 'sage' as AgentName, message: `Email draft failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── News intel ─────────────────────────────────────────────
+  if (/news|what.*happening|market news|any news|morning news/i.test(userMessage)) {
+    try {
+      const { runNewsIntel } = await import('./news-intel')
+      await runNewsIntel()
+      return { agent: 'scout' as AgentName, message: `News sweep done, sir. Filtered to what matters — posted to #jarvis.` }
+    } catch (err) {
+      return { agent: 'scout' as AgentName, message: `News intel failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   const [context, route] = await Promise.all([
     getCachedContext(),
     Promise.resolve(detectRoute(userMessage)),
@@ -230,6 +254,15 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   let agentIntel = ''
   let telemetryAgent: AgentName = 'jarvis'
+
+  // ── Beckett live status — injected into SAGE responses ──────
+  let beckettCtx = ''
+  if (route === 'sage' || /beckett|son|custody|pickup|drop.?off|father|dad/i.test(userMessage)) {
+    try {
+      const { getBeckettContext } = await import('./beckett')
+      beckettCtx = '\n\n' + await getBeckettContext()
+    } catch { /* skip */ }
+  }
 
   // FORGE: detect build intent and hand off to build engine
   if (isBuildIntent(userMessage)) {
@@ -290,7 +323,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     telemetryAgent = route
   }
 
-  const systemPrompt = JARVIS_SYSTEM + context + profileCtx + semanticCtx + liveData + agentIntel +
+  const systemPrompt = JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + agentIntel +
     (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
