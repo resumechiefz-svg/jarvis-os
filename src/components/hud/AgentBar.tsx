@@ -24,7 +24,7 @@ export default function AgentBar({ activeAgent }: Props) {
   return (
     <div className="agent-bar flex items-center gap-0 px-4 border-b border-cyan-900/30 bg-black/70 overflow-x-auto">
       {/* Label */}
-      <div className="text-[8px] tracking-[0.3em] text-cyan-500/40 uppercase shrink-0 mr-4 font-bold">
+      <div className="text-[11px] tracking-[0.3em] text-cyan-500/40 uppercase shrink-0 mr-4 font-bold">
         TEAM
       </div>
 
@@ -45,7 +45,7 @@ export default function AgentBar({ activeAgent }: Props) {
               }}
             />
             <span
-              className="text-[9px] font-mono font-bold tracking-wider"
+              className="text-[12px] font-mono font-bold tracking-wider"
               style={{
                 color: isActive ? agent.color : `${agent.color}90`,
                 textShadow: isActive ? `0 0 8px ${agent.color}` : 'none',
@@ -53,7 +53,7 @@ export default function AgentBar({ activeAgent }: Props) {
             >
               {agent.name}
             </span>
-            <span className="text-[7px] text-white/20 font-mono ml-0.5">
+            <span className="text-[10px] text-white/20 font-mono ml-0.5">
               {isActive ? 'WORKING' : 'ACTIVE'}
             </span>
           </div>
@@ -62,8 +62,8 @@ export default function AgentBar({ activeAgent }: Props) {
 
       {/* System status */}
       <div className="ml-auto shrink-0 flex items-center gap-3 pl-4">
-        <span className="text-[8px] text-green-500/60 tracking-widest">13 AGENTS ONLINE</span>
-        <span className="text-[8px] text-cyan-500/40 tracking-widest">PHASE 4 COMPLETE</span>
+        <span className="text-[11px] text-green-500/60 tracking-widest">13 AGENTS ONLINE</span>
+        <span className="text-[11px] text-cyan-500/40 tracking-widest">PHASE 4 COMPLETE</span>
       </div>
     </div>
   )

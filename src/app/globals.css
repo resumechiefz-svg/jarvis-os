@@ -47,8 +47,8 @@ body::after {
 */
 .hud-root {
   display: grid;
-  grid-template-rows: 30px 1fr 24px 220px 30px;
-  grid-template-columns: 280px 1fr 280px;
+  grid-template-rows: 36px 1fr 28px 260px 32px;
+  grid-template-columns: 320px 1fr 320px;
   height: 100vh;
   width: 100vw;
   background: var(--bg);
@@ -60,7 +60,7 @@ body::after {
 .agent-bar {
   grid-column: 1 / -1;
   grid-row: 1;
-  height: 30px;
+  height: 36px;
 }
 
 /* Left panel spans rows 2-4 (full height) — scrollable so no clipping */
@@ -99,7 +99,7 @@ body::after {
 .ticker-bar {
   grid-column: 2;
   grid-row: 3;
-  height: 24px;
+  height: 28px;
   border-top: 1px solid rgba(0, 212, 255, 0.08);
   border-bottom: 1px solid rgba(0, 212, 255, 0.08);
 }
@@ -160,7 +160,7 @@ body::after {
   gap: 6px;
   padding: 0 14px;
   height: 38px;
-  font-size: 10px;
+  font-size: 12px;
   font-family: 'Courier New', monospace;
   font-weight: bold;
   letter-spacing: 0.15em;
@@ -176,7 +176,7 @@ body::after {
 
 .workspace-tab:hover { color: rgba(255,255,255,0.7) !important; }
 .tab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.tab-phase { font-size: 8px; opacity: 0.5; margin-left: 2px; }
+.tab-phase { font-size: 10px; opacity: 0.5; margin-left: 2px; }
 
 .workspace-body {
   flex: 1;
@@ -228,7 +228,7 @@ body::after {
 
 .workspace-pre {
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   color: rgba(255,255,255,0.8);
   white-space: pre-wrap;
@@ -262,7 +262,7 @@ body::after {
   border: none;
   outline: none;
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(255,255,255,0.8);
 }
 .workspace-input::placeholder { color: rgba(255,255,255,0.2); }

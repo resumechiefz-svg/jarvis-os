@@ -8,19 +8,19 @@ import PlaidSection from './PlaidSection'
 
 function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="border border-white/5 px-2 py-1 bg-white/[0.01]">
-      <div className="text-[8px] text-white/30 tracking-wider uppercase mb-0.5">{label}</div>
-      <div className="text-[12px] font-mono font-bold leading-none" style={{ color: color ?? '#cce8ff' }}>{value}</div>
-      {sub && <div className="text-[8px] text-white/20 mt-0.5">{sub}</div>}
+    <div className="border border-white/5 px-2 py-1 bg-white/[0.01] overflow-hidden">
+      <div className="text-[11px] text-white/30 tracking-wider uppercase mb-0.5 truncate">{label}</div>
+      <div className="text-[15px] font-mono font-bold leading-none truncate" style={{ color: color ?? '#cce8ff' }}>{value}</div>
+      {sub && <div className="text-[11px] text-white/20 mt-0.5 truncate">{sub}</div>}
     </div>
   )
 }
 
 function SectionHead({ title, badge }: { title: string; badge?: string }) {
   return (
-    <div className="col-span-2 flex items-center justify-between text-[8px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1">
-      <span className="text-cyan-500/50">{title}</span>
-      {badge && <span className="text-[7px] text-green-500/50 font-normal">{badge}</span>}
+    <div className="col-span-2 flex items-center justify-between text-[11px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1 overflow-hidden">
+      <span className="text-cyan-500/50 truncate">{title}</span>
+      {badge && <span className="text-[10px] text-green-500/50 font-normal shrink-0 ml-1">{badge}</span>}
     </div>
   )
 }

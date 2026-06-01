@@ -293,15 +293,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       <div ref={messagesRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
         {messages.length === 0 && !loading && (
           <div className="flex items-center gap-3 py-1 select-none">
-            <div className="text-[9px] text-cyan-500/30 tracking-widest uppercase">AB Command Center</div>
-            <div className="text-[9px] text-white/10 tracking-widest">NOVA ● SAGE ● VAULT ● ECHO ● ATLAS ● 12 AGENTS ONLINE</div>
+            <div className="text-[11px] text-cyan-500/30 tracking-widest uppercase">AB Command Center</div>
+            <div className="text-[11px] text-white/10 tracking-widest">NOVA ● SAGE ● VAULT ● ECHO ● ATLAS ● 12 AGENTS ONLINE</div>
           </div>
         )}
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             {msg.role === 'assistant' && (
               <div
-                className="text-[9px] font-bold tracking-wider shrink-0 pt-1"
+                className="text-[11px] font-bold tracking-wider shrink-0 pt-1"
                 style={{ color: AGENT_COLORS[msg.agent] ?? '#00d4ff' }}
               >
                 [{msg.agent.toUpperCase()}]
@@ -321,8 +321,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         ))}
         {loading && (
           <div className="flex gap-2">
-            <div className="text-[9px] font-bold tracking-wider text-cyan-400">[JARVIS]</div>
-            <div className="text-[11px] text-white/40 flex gap-1 pt-1">
+            <div className="text-[11px] font-bold tracking-wider text-cyan-400">[JARVIS]</div>
+            <div className="text-[12px] text-white/40 flex gap-1 pt-1">
               <span className="animate-bounce">.</span>
               <span className="animate-bounce" style={{ animationDelay: '0.1s' }}>.</span>
               <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>.</span>
@@ -337,25 +337,12 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           <button
             key={qc.label}
             onClick={() => send(qc.command)}
-            className="text-[9px] tracking-wider px-2 py-0.5 border border-cyan-900/50 text-cyan-500/60 hover:text-cyan-300 hover:border-cyan-600 transition-colors uppercase"
+            className="text-[11px] tracking-wider px-2 py-0.5 border border-cyan-900/50 text-cyan-500/60 hover:text-cyan-300 hover:border-cyan-600 transition-colors uppercase"
           >
             {qc.label}
           </button>
         ))}
       </div>
-
-      {/* Realtime voice — inline, owns the mic button */}
-      <Suspense fallback={null}>
-        <RealtimeVoice
-          hidden={false}
-          inlineButton
-          onTranscript={(text, role, agent) => {
-            const msg = { id: Date.now().toString(), role, agent: (agent ?? 'jarvis') as import('@/lib/types').AgentName, content: text, timestamp: new Date() }
-            onMessage(msg)
-            if (agent) onAgentChange(agent as import('@/lib/types').AgentName)
-          }}
-        />
-      </Suspense>
 
       {/* Hidden file input — images, PDFs, docs */}
       <input
@@ -367,16 +354,16 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       />
 
       {/* Input row */}
-      <div className="px-4 pb-3 flex gap-2">
+      <div className="px-4 pb-3 flex gap-2 items-stretch">
         <div className="flex-1 flex items-center border border-cyan-800/50 bg-black/40 px-3">
-          <span className="text-cyan-500/50 text-[10px] mr-2 font-mono">{'>'}</span>
+          <span className="text-cyan-500/50 text-[12px] mr-2 font-mono">{'>'}</span>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send(input)}
             placeholder={listening ? 'Listening...' : 'Say anything to Jarvis...'}
-            className="flex-1 bg-transparent text-[12px] text-cyan-200 placeholder:text-cyan-800 outline-none font-mono py-2"
+            className="flex-1 bg-transparent text-[13px] text-cyan-200 placeholder:text-cyan-800 outline-none font-mono py-2"
             disabled={loading}
             autoFocus
           />
@@ -394,10 +381,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           title="Upload photo, PDF, or doc — card pricing, chart analysis, resume review"
         >
           <Camera size={14} />
-          <span className="text-[9px] font-mono tracking-wider">FILE</span>
+          <span className="text-[11px] font-mono tracking-wider">FILE</span>
         </button>
-
-        {/* Mic is handled by RealtimeVoice above — button rendered there */}
 
         {/* Stop speaking button — only shows when Jarvis is talking */}
         {speaking && (
@@ -432,10 +417,23 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
         </button>
 
+        {/* Realtime mic button — last in the row */}
+        <Suspense fallback={null}>
+          <RealtimeVoice
+            hidden={false}
+            inlineButton
+            onTranscript={(text, role, agent) => {
+              const msg = { id: Date.now().toString(), role, agent: (agent ?? 'jarvis') as import('@/lib/types').AgentName, content: text, timestamp: new Date() }
+              onMessage(msg)
+              if (agent) onAgentChange(agent as import('@/lib/types').AgentName)
+            }}
+          />
+        </Suspense>
+
         <button
           onClick={() => send(input)}
           disabled={loading || !input.trim()}
-          className="px-4 text-[10px] font-bold tracking-widest bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 hover:bg-cyan-800/40 disabled:opacity-30 transition-colors uppercase"
+          className="px-4 text-[12px] font-bold tracking-widest bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 hover:bg-cyan-800/40 disabled:opacity-30 transition-colors uppercase"
         >
           Send
         </button>

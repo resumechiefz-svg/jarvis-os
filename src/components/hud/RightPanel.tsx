@@ -8,19 +8,19 @@ const FinancialIndependenceDashboard = dynamic(() => import('./FinancialIndepend
 
 function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="border border-white/5 px-2 py-1 bg-white/[0.01]">
-      <div className="text-[8px] text-white/30 tracking-wider uppercase mb-0.5">{label}</div>
-      <div className="text-[12px] font-mono font-bold leading-none" style={{ color: color ?? '#cce8ff' }}>{value}</div>
-      {sub && <div className="text-[8px] text-white/20 mt-0.5">{sub}</div>}
+    <div className="border border-white/5 px-2 py-1 bg-white/[0.01] overflow-hidden">
+      <div className="text-[11px] text-white/30 tracking-wider uppercase mb-0.5 truncate">{label}</div>
+      <div className="text-[15px] font-mono font-bold leading-none truncate" style={{ color: color ?? '#cce8ff' }}>{value}</div>
+      {sub && <div className="text-[11px] text-white/20 mt-0.5 truncate">{sub}</div>}
     </div>
   )
 }
 
 function SectionHead({ title, badge }: { title: string; badge?: string }) {
   return (
-    <div className="col-span-2 flex items-center justify-between text-[8px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1">
-      <span className="text-cyan-500/50">{title}</span>
-      {badge && <span className="text-[7px] font-normal" style={{ color: badge.includes('LIVE') ? '#00ff88' : '#c9a84c' }}>{badge}</span>}
+    <div className="col-span-2 flex items-center justify-between text-[11px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1 overflow-hidden">
+      <span className="text-cyan-500/50 truncate">{title}</span>
+      {badge && <span className="text-[10px] font-normal shrink-0 ml-1" style={{ color: badge.includes('LIVE') ? '#00ff88' : '#c9a84c' }}>{badge}</span>}
     </div>
   )
 }
@@ -63,7 +63,7 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
   const pnlColor = (v: number) => v > 0 ? up : v < 0 ? dn : nu
 
   return (
-    <div className="right-panel h-full overflow-hidden px-2 py-2">
+    <div className="right-panel h-full overflow-y-auto overflow-x-hidden px-2 py-2">
       <div className="grid grid-cols-2 gap-1 h-full content-start">
 
         {/* Clock row */}
@@ -97,7 +97,7 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
         <Cell label="MRR" value={`$${mrr.toFixed(0)}`} color={mrr > 0 ? up : nu} />
         <Cell label="ARR" value={`$${(mrr * 12).toFixed(0)}`} />
         <div className="col-span-2 mt-0.5 mb-1">
-          <div className="flex justify-between text-[7px] text-white/20 mb-0.5"><span>MRR Goal</span><span>${mrr.toFixed(0)} / $10k</span></div>
+          <div className="flex justify-between text-[10px] text-white/20 mb-0.5 overflow-hidden"><span className="truncate">MRR Goal</span><span className="shrink-0 ml-1">${mrr.toFixed(0)} / $10k</span></div>
           <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${Math.min(100, (mrr / 10000) * 100)}%`, background: 'linear-gradient(90deg, #a855f7, #00d4ff)' }} />
           </div>
@@ -110,8 +110,8 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
 
         {/* Active Agent */}
         <SectionHead title="Active" />
-        <div className="col-span-2 text-center py-1">
-          <div className="text-[15px] font-bold tracking-[0.3em]" style={{ color: '#00d4ff', textShadow: '0 0 16px #00d4ff50' }}>
+        <div className="col-span-2 text-center py-1 overflow-hidden">
+          <div className="text-[15px] font-bold tracking-[0.3em] truncate" style={{ color: '#00d4ff', textShadow: '0 0 16px #00d4ff50' }}>
             {activeAgent.toUpperCase()}
           </div>
         </div>
