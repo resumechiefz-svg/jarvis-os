@@ -311,6 +311,24 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Voice-to-action: Post pending eBay draft ──────────────
+  if (/post it|list it|go ahead.*list|post.*draft|list.*draft/i.test(userMessage)) {
+    try {
+      const { postPendingDraft } = await import('./photo-to-listing')
+      postPendingDraft().catch(() => {})
+      return { agent: 'lister' as AgentName, message: `Posting to eBay now — I'll send you the link in #jarvis when it's live.` }
+    } catch { /* fall through */ }
+  }
+
+  // ── Voice-to-action: Competitor scan ──────────────────────
+  if (/competitor|what.*(kickresume|zety|resume\.io)|comp.*scan|intel.*report/i.test(userMessage)) {
+    try {
+      const { runCompetitorIntel } = await import('./competitor-intel')
+      runCompetitorIntel().catch(() => {})
+      return { agent: 'atlas' as AgentName, message: `Running competitor scan now. I'll scrape their pricing pages, compare against last week, and post the full intel report to #jarvis in a couple minutes.` }
+    } catch { /* fall through */ }
+  }
+
   // ── Voice-to-action: Habit logging ────────────────────────
   if (/logged|mark(ed)?|done|finished|completed|did my/i.test(userMessage) && /habit|read|cold|plunge|meditat|journal|study|gratitude|phone/i.test(userMessage)) {
     try {
