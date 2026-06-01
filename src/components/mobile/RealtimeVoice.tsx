@@ -20,16 +20,31 @@ interface Props {
 export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, hidden }: Props) {
   const [state, setState] = useState<VoiceState>('idle')
   const [error, setError] = useState('')
+  const [blockedBy, setBlockedBy] = useState<string | null>(null) // other device holding session
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const dcRef = useRef<RTCDataChannel | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const sessionActiveRef = useRef(false)
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Stable device ID for this browser session
+  const deviceId = useRef(
+    typeof window !== 'undefined'
+      ? (sessionStorage.getItem('jarvis_device_id') ?? (() => {
+          const id = `${/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'}_${Date.now()}`
+          sessionStorage.setItem('jarvis_device_id', id)
+          return id
+        })())
+      : 'unknown'
+  )
+  const deviceType = /iPhone|iPad|iPod|Android/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? 'mobile' : 'desktop'
 
   const set = (s: VoiceState) => { setState(s); onStateChange?.(s) }
 
   const stopSession = useCallback(() => {
     sessionActiveRef.current = false
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current)
     dcRef.current?.close()
     pcRef.current?.close()
     streamRef.current?.getTracks().forEach(t => t.stop())
@@ -37,6 +52,8 @@ export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, 
     pcRef.current = null
     streamRef.current = null
     set('idle')
+    // Release device session
+    fetch('/api/device/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: deviceId.current }) }).catch(() => {})
   }, [])
 
   // Cleanup on unmount
@@ -51,6 +68,27 @@ export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, 
     try {
       set('connecting')
       setError('')
+      setBlockedBy(null)
+
+      // 0. Check device coordination — one active voice session at a time
+      const coordRes = await fetch('/api/device/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId.current, deviceType }),
+      }).then(r => r.json()).catch(() => ({ claimed: true }))
+
+      if (!coordRes.claimed) {
+        const otherType = coordRes.activeDevice?.deviceType ?? 'another device'
+        setBlockedBy(otherType)
+        set('idle')
+        return
+      }
+
+      // Start heartbeat to hold session
+      heartbeatRef.current = setInterval(() => {
+        fetch('/api/device/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: deviceId.current }) })
+          .then(r => r.json()).then(d => { if (!d.active) stopSession() }).catch(() => {})
+      }, 30000)
 
       // 1. Get ephemeral session token from our API
       const tokenRes = await fetch('/api/voice/realtime')
@@ -201,6 +239,22 @@ Speak conversationally — short answers unless detail is requested.`,
 
   // Hidden mode — ambient dot in header, no button
   if (hidden) {
+    // Blocked by another device — show takeover option
+    if (blockedBy) {
+      return (
+        <span
+          onClick={() => {
+            fetch('/api/device/takeover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: deviceId.current, deviceType }) })
+              .then(() => { setBlockedBy(null); startSession() }).catch(() => {})
+          }}
+          title={`${blockedBy} is active — tap to take over`}
+          style={{ fontSize: 9, color: '#ffc800', cursor: 'pointer', letterSpacing: '0.05em' }}
+        >
+          TAKE OVER
+        </span>
+      )
+    }
+
     const dotColor = state === 'listening' ? '#00ff88' : state === 'speaking' ? '#a855f7' : state === 'thinking' ? '#00d4ff' : state === 'error' ? '#ff4455' : '#ffffff22'
     return (
       <span
