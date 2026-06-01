@@ -176,54 +176,56 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
   const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey travis', 'hey garcia'] // fallback mishears
 
+  // Use a ref for send so the recognition callback always has the latest version
+  const sendRef = useRef(send)
+  useEffect(() => { sendRef.current = send }, [send])
+
   const startWakeWordListener = useCallback(() => {
     if (typeof window === 'undefined') return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any
     const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
-
     if (!SR) return
 
     const recognition = new SR()
     recognition.lang = 'en-US'
     recognition.interimResults = false
-    recognition.maxAlternatives = 1
+    recognition.maxAlternatives = 3  // more alternatives = better wake word matching
     recognition.continuous = false
 
     recognition.onstart = () => setListening(true)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim()
+      // Check all alternatives for wake word — helps with mishearing
+      let transcript = ''
+      for (let i = 0; i < event.results[0].length; i++) {
+        transcript = event.results[0][i].transcript.toLowerCase().trim()
+        if (WAKE_WORDS.some(w => transcript.includes(w))) break
+      }
 
       const wakeDetected = WAKE_WORDS.some(w => transcript.includes(w))
 
       if (wakeDetected) {
-        // Stop Jarvis speaking if wake word heard mid-speech
         stopSpeakRef.current?.()
         stopSpeakRef.current = null
         setSpeaking(false)
 
         let command = transcript
-        for (const w of WAKE_WORDS) {
-          command = command.replace(w, '').trim()
-        }
+        for (const w of WAKE_WORDS) command = command.replace(w, '').trim()
 
         setTriggered(true)
         setTimeout(() => setTriggered(false), 2000)
 
-        if (command.length > 1) {
-          send(command)
-        }
+        // Send command if there is one, otherwise send empty string to trigger greeting
+        sendRef.current(command.length > 1 ? command : 'hey')
       } else if (transcript.length > 1) {
-        send(transcript)
+        sendRef.current(transcript)
       }
     }
 
     recognition.onend = () => {
-      // Only restart SpeechRecognition if Realtime voice is NOT active
-      // Realtime handles all voice I/O when connected — running both causes dual audio
       restartTimerRef.current = setTimeout(() => {
         if (recognitionRef.current) startWakeWordListener()
       }, 300)
@@ -231,17 +233,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (e: any) => {
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        setListening(false)
-      }
+      if (e.error !== 'no-speech' && e.error !== 'aborted') setListening(false)
       restartTimerRef.current = setTimeout(() => {
         if (recognitionRef.current) startWakeWordListener()
       }, 1000)
     }
 
     recognitionRef.current = recognition
-    recognition.start()
-  }, [send])
+    try { recognition.start() } catch { /* already started */ }
+  }, []) // stable — uses sendRef for latest send
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (!file || analyzingImage) return
