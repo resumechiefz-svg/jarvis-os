@@ -47,13 +47,21 @@ body::after {
 */
 .hud-root {
   display: grid;
-  grid-template-rows: 36px 1fr 28px 260px 32px;
-  grid-template-columns: 320px 1fr 320px;
+  grid-template-rows: 38px 1fr 28px 280px 30px;
+  grid-template-columns: 340px 1fr 340px;
   height: 100vh;
   width: 100vw;
   background: var(--bg);
   gap: 0;
   overflow: hidden;
+}
+
+/* Ultrawide / curved monitor optimization (≥2560px wide) */
+@media (min-width: 2560px) {
+  .hud-root {
+    grid-template-columns: 420px 1fr 420px;
+    grid-template-rows: 42px 1fr 30px 300px 32px;
+  }
 }
 
 /* Row 1: Agent bar */

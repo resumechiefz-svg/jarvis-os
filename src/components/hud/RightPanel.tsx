@@ -55,7 +55,7 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
       fetch('/api/kalshi').then(r => r.json()).then(d => d?.lastUpdated ? setPhantom(d) : null).catch(() => {})
     }
     load()
-    const t = setInterval(load, 60000)
+    const t = setInterval(load, 30000) // 30s — catch sales faster
     return () => clearInterval(t)
   }, [])
 
@@ -73,11 +73,24 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
         </div>
 
         {/* Card Chiefz */}
-        <SectionHead title="Card Chiefz" badge="EBAY" />
-        <Cell label="Wkly Rev" value={vault ? `$${vault.weeklyRevenue.toFixed(0)}` : '—'} color={vault?.weeklyRevenue ? gold : nu} />
+        <SectionHead title="Card Chiefz" badge="EBAY LIVE" />
+        <Cell label="Wkly Rev" value={vault ? `$${vault.weeklyRevenue.toFixed(2)}` : '—'} color={vault?.weeklyRevenue ? gold : nu} />
         <Cell label="Mo Sales" value={vault ? String(vault.monthlySales) : '—'} />
         <Cell label="Feedback" value={vault ? `${vault.feedbackScore}%` : '—'} color={up} />
         <Cell label="All Sales" value={vault ? `${vault.totalSales}+` : '—'} />
+
+        {/* Recent sales feed */}
+        {vault?.recentSales && vault.recentSales.length > 0 && (
+          <div className="col-span-2 border border-white/5 bg-white/[0.01] px-2 py-1 mb-1">
+            <div className="text-[9px] text-cyan-500/40 tracking-widest uppercase mb-1">Recent Sales</div>
+            {vault.recentSales.slice(0, 4).map((s, i) => (
+              <div key={i} className="flex justify-between items-baseline gap-1 py-0.5 border-b border-white/[0.03] last:border-0">
+                <span className="text-[10px] text-white/50 truncate flex-1">{s.item}</span>
+                <span className="text-[11px] font-mono shrink-0" style={{ color: gold }}>${s.price.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Kalshi Phantom */}
         <SectionHead title="Phantom" badge={phantom?.mode === 'live' ? '● LIVE' : '● PAPER'} />
