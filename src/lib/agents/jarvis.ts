@@ -288,6 +288,63 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Voice-to-action: eBay listing from description ─────────
+  if (/list (that |this |the )?(card|it)|put (that|this|it) on ebay|create (a )?listing/i.test(userMessage)) {
+    try {
+      const { getListingRecommendations } = await import('./lister')
+      const listing = await getListingRecommendations(userMessage)
+      const price = userMessage.match(/\$(\d+)/)?.[1] ?? '?'
+      return { agent: 'lister' as AgentName, message: `${listing} Posted to #lister for review.` }
+    } catch (err) {
+      return { agent: 'lister' as AgentName, message: `Listing failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── Voice-to-action: revenue opportunity scan ───────────────
+  if (/revenue opportunity|find (an? )?opportunity|what opportunity|spot (an? )?opportunity|atlas.*opportunity/i.test(userMessage)) {
+    try {
+      const { scanForOpportunities } = await import('./revenue-scout')
+      await scanForOpportunities()
+      return { agent: 'atlas' as AgentName, message: `Running an opportunity scan now, sir. I'll post what I find to #jarvis within a minute — full execution plan included.` }
+    } catch (err) {
+      return { agent: 'atlas' as AgentName, message: `Scan failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── Voice-to-action: YouTube/ebook content ─────────────────
+  if (/write (a )?(youtube|video) script|generate (a )?script|(make|create) (a )?(youtube|video)/i.test(userMessage)) {
+    try {
+      const { runContentPipeline } = await import('./content-engine')
+      const channel = /card|chiefz|hobby/i.test(userMessage) ? 'cardchiefz' : 'resumechiefz'
+      await runContentPipeline(channel, 'youtube')
+      return { agent: 'echo' as AgentName, message: `Script drafted for ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}, sir. Saved to Drive and posted to #jarvis for approval.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `Script failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  if (/write (an? )?ebook|generate (an? )?ebook|create (an? )?ebook/i.test(userMessage)) {
+    try {
+      const { runContentPipeline } = await import('./content-engine')
+      const channel = /card|chiefz|hobby/i.test(userMessage) ? 'cardchiefz' : 'resumechiefz'
+      await runContentPipeline(channel, 'ebook')
+      return { agent: 'echo' as AgentName, message: `Ebook drafted for ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}, sir. Full manuscript saved to Drive. Posted to #jarvis for your review.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `Ebook failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
+  // ── Voice-to-action: trading journal ───────────────────────
+  if (/trading patterns|how('?s| is) my trading|trade journal|trading journal analysis/i.test(userMessage)) {
+    try {
+      const { analyzeTradingPatterns } = await import('./trading-journal')
+      const patterns = await analyzeTradingPatterns()
+      return { agent: 'ledger' as AgentName, message: patterns }
+    } catch (err) {
+      return { agent: 'ledger' as AgentName, message: `Journal analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   // ── News intel ─────────────────────────────────────────────
   if (/news|what.*happening|market news|any news|morning news/i.test(userMessage)) {
     try {
