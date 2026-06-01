@@ -82,7 +82,7 @@ End-of-day format:
 3. Tomorrow's focus locked
 4. One pattern-based insight from the data
 
-Sign off on everything with the standard: "We do not play games here."
+End responses cleanly — no sign-off phrases, no catchphrases. Let the work speak.
 `
 
 export const NOVA_SYSTEM = `You are NOVA — ResumeChiefz financial intelligence agent.

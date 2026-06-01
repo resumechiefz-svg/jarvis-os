@@ -119,7 +119,7 @@ export default function HUD() {
       {/* Row 5: Footer */}
       <div className="hud-footer flex items-center justify-between px-4">
         <span className="text-[8px] tracking-[0.2em] text-cyan-950 uppercase">
-          JARVIS OS v2.0 — &quot;WE DO NOT PLAY GAMES HERE ON AB&apos;S TEAM&quot;
+          JARVIS OS v2.0 — AB COMMAND CENTER
         </span>
         <div className="flex items-center gap-3">
           <ScreenAwareness onInsight={text => handleMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: text, timestamp: new Date() })} />
