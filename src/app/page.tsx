@@ -11,6 +11,9 @@ import RightPanel from '@/components/hud/RightPanel'
 import GoalOne from '@/components/hud/GoalOne'
 import CommandInterface from '@/components/hud/CommandInterface'
 import PushToggle from '@/components/hud/PushToggle'
+import JarvisGreeting from '@/components/hud/JarvisGreeting'
+import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
+import ScreenAwareness from '@/components/hud/ScreenAwareness'
 import type { Message, AgentName } from '@/lib/types'
 
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
@@ -64,7 +67,10 @@ export default function HUD() {
 
   return (
     <div className="hud-root">
-      {/* Row 1: Agent status bar (replaces old news ticker at top) */}
+      {/* Background systems — invisible, always running */}
+      <VoiceInterrupt onMessage={msg => handleMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: msg, timestamp: new Date() })} />
+
+      {/* Row 1: Agent status bar */}
       <AgentBar activeAgent={activeAgent} />
 
       {/* Row 2 Left: Live data panels */}
@@ -99,6 +105,9 @@ export default function HUD() {
       <ForgeBuildMonitor />
       <NewsTicker />
 
+      {/* Jarvis greeting + predictive suggestions */}
+      <JarvisGreeting onSuggestionClick={text => handleMessage({ id: Date.now().toString(), role: 'user', agent: 'jarvis', content: text, timestamp: new Date() })} />
+
       {/* Row 4: Command interface */}
       <CommandInterface
         messages={messages}
@@ -113,6 +122,7 @@ export default function HUD() {
           JARVIS OS v2.0 — &quot;WE DO NOT PLAY GAMES HERE ON AB&apos;S TEAM&quot;
         </span>
         <div className="flex items-center gap-3">
+          <ScreenAwareness onInsight={text => handleMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: text, timestamp: new Date() })} />
           <PushToggle />
           {[
             { label: 'Workspace', href: '/workspace' },

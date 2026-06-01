@@ -11,7 +11,7 @@ const CRON_ROUTES = ['/api/monitor', '/api/analyze', '/api/conversion']
 const MOBILE_ROUTES = ['/api/mobile']
 
 // Always public — push subscriptions, auth endpoint, news feed, Google OAuth callback
-const PUBLIC_ROUTES = ['/api/push', '/api/auth', '/api/news', '/api/stocks', '/api/google/auth', '/api/google/callback', '/api/siri', '/api/linkedin/auth', '/api/linkedin/callback']
+const PUBLIC_ROUTES = ['/api/push', '/api/auth', '/api/news', '/api/stocks', '/api/google/auth', '/api/google/callback', '/api/siri', '/api/linkedin/auth', '/api/linkedin/callback', '/api/watch']
 
 function isAuthenticated(req: NextRequest): boolean {
   if (!SESSION_SECRET) return true // Dev: skip if no secret configured
