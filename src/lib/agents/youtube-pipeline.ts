@@ -14,6 +14,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
+import { getStyleForVideo } from './content-styles'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs'
@@ -156,10 +157,21 @@ Feel: stops the scroll in the first 2 seconds or dies.`,
   const sceneCount = selectedFormat === 'shorts' ? 10 : 20
   const scriptLength = selectedFormat === 'shorts' ? '300-400 words' : '2,500-3,500 words'
 
-  // Copyright-safe visual style — "Lego" is never used, "toy minifigure" style is
-  const visualStyle = theme?.toLowerCase().includes('lego')
-    ? 'plastic toy minifigure character style — blocky cartoon character with smooth plastic texture, round head, simple facial expression, cylindrical hands, primary colors, clean white background, flat cartoon illustration. Copyright-safe: do NOT reference Lego brand. Style: Toy Story meets corporate explainer cartoon.'
-    : (theme ?? 'clean modern illustration, professional but approachable')
+  // Pull recent styles to avoid repetition
+  const { data: recentVideos } = await supabaseAdmin
+    .from('ai_memories').select('context').eq('category', 'youtube_pipeline')
+    .order('created_at', { ascending: false }).limit(8)
+  const recentStyleIds = (recentVideos ?? []).map(v => {
+    try { return JSON.parse(v.context ?? '{}').styleId ?? '' } catch { return '' }
+  }).filter(Boolean)
+
+  // Pick a style — rotates automatically, never repeats within 6 videos
+  const selectedStyle = theme
+    ? { visualDescription: theme, name: 'Custom', id: 'custom', energyLevel: 'high' as const, bestFor: [], textStyle: '', exampleAngle: '' }
+    : getStyleForVideo(channel, recentStyleIds, selectedTopic)
+
+  const visualStyle = selectedStyle.visualDescription
+  await slack(`🎨 *Style selected: ${selectedStyle.name}* for "${selectedTopic}"`)
 
   const msg = await claude.messages.create({
     model: 'claude-sonnet-4-6',
@@ -609,15 +621,25 @@ export async function uploadToYouTube(pkg: VideoPackage): Promise<string> {
 
   if (!fs.existsSync(videoPath)) throw new Error('Video file not found — run assembly first')
 
+  // Channel IDs — set in .env.local
+  // YOUTUBE_RC_CHANNEL_ID  = your ResumeChiefz channel ID (starts with UC...)
+  // YOUTUBE_CC_CHANNEL_ID  = your Card Chiefz channel ID (starts with UC...)
+  const channelId = pkg.channel === 'resumechiefz'
+    ? process.env.YOUTUBE_RC_CHANNEL_ID
+    : process.env.YOUTUBE_CC_CHANNEL_ID
+
+  const categoryId = pkg.channel === 'cardchiefz' ? '26' : '22' // 26 = Howto, 22 = People & Blogs
+
   const res = await youtube.videos.insert({
     part: ['snippet', 'status'],
     requestBody: {
       snippet: {
         title: pkg.title,
-        description: pkg.description,
+        description: `${pkg.description}\n\n${pkg.channel === 'resumechiefz' ? '🔗 Try ResumeChiefz free: https://resumechiefz.com' : '🃏 Shop Card Chiefz: https://cardchiefz.com'}`,
         tags: pkg.tags,
-        categoryId: '22', // People & Blogs (or 26 for Howto)
+        categoryId,
         defaultLanguage: 'en',
+        ...(channelId ? { channelId } : {}),
       },
       status: {
         privacyStatus: 'private', // Start private — AB reviews, then makes public
