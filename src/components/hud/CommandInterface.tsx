@@ -223,9 +223,10 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
 
     recognition.onend = () => {
-      // Restart automatically to keep always listening
+      // Only restart SpeechRecognition if Realtime voice is NOT active
+      // Realtime handles all voice I/O when connected — running both causes dual audio
       restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) startWakeWordListener()
+        if (recognitionRef.current && !realtimeOpen) startWakeWordListener()
       }, 300)
     }
 
@@ -234,9 +235,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       if (e.error !== 'no-speech' && e.error !== 'aborted') {
         setListening(false)
       }
-      // Restart on error after short delay
       restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) startWakeWordListener()
+        if (recognitionRef.current && !realtimeOpen) startWakeWordListener()
       }, 1000)
     }
 
@@ -277,15 +277,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
   const toggleMic = useCallback(() => {
     if (listening) {
-      // Turn off
       recognitionRef.current = null
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
       setListening(false)
     } else {
-      // Turn on always-listening mode
+      // Don't start SpeechRecognition when Realtime is active — causes dual voice
+      if (realtimeOpen) return
       startWakeWordListener()
     }
-  }, [listening, startWakeWordListener])
+  }, [listening, realtimeOpen, startWakeWordListener])
 
   return (
     <div className="command-interface flex flex-col h-full">
@@ -407,7 +407,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
               ? 'border-green-500 text-green-400 bg-green-900/20'
               : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
           }`}
-          title={listening ? 'Always-on: say "Hey Jarvis" — click to turn off' : 'Click to enable always-on voice'}
+          title={realtimeOpen ? 'Realtime voice active — mic handled by OpenAI Realtime' : listening ? 'Always-on: say "Hey Jarvis" — click to turn off' : 'Click to enable always-on voice'}
         >
           {listening ? <Mic size={14} /> : <MicOff size={14} />}
         </button>
