@@ -357,11 +357,11 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         />
       </Suspense>
 
-      {/* Hidden image input */}
+      {/* Hidden file input — images, PDFs, docs */}
       <input
         ref={imageInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.pdf,.doc,.docx,.txt,.csv"
         className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = '' }}
       />
@@ -382,18 +382,19 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           />
         </div>
 
-        {/* Camera / image upload */}
+        {/* File / photo upload */}
         <button
           onClick={() => imageInputRef.current?.click()}
           disabled={analyzingImage}
-          className={`px-3 border transition-colors ${
+          className={`px-3 border transition-colors flex items-center gap-1.5 ${
             analyzingImage
               ? 'border-yellow-500/70 text-yellow-400 bg-yellow-900/20 animate-pulse'
               : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
           }`}
-          title="Send photo to Jarvis — card pricing, chart analysis, anything"
+          title="Upload photo, PDF, or doc — card pricing, chart analysis, resume review"
         >
           <Camera size={14} />
+          <span className="text-[9px] font-mono tracking-wider">FILE</span>
         </button>
 
         {/* Mic button — green = always-on wake word mode, cyan flash = triggered */}
