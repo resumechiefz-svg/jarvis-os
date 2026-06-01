@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
-import { voiceState } from '@/lib/voice-state'
 import type { Message, AgentName } from '@/lib/types'
 
 const AGENT_COLORS: Record<string, string> = {
@@ -32,7 +31,7 @@ const QUICK_COMMANDS = [
   { label: 'RC Acquisition', command: 'Atlas, how close is ResumeChiefz to being acquisition-ready?' },
 ]
 
-// ElevenLabs — routes through voiceState so only ONE voice plays at a time
+// ElevenLabs TTS — direct playback, no competing audio systems
 async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: number) => void): Promise<() => void> {
   const res = await fetch('/api/speak', {
     method: 'POST',
@@ -74,11 +73,11 @@ async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: nu
     audioCtx?.close()
   }
 
-  // Play through global voice state — stops anything else playing first
-  await voiceState.playAudio(audio)
+  audio.play().catch(() => {})
 
   return () => {
-    voiceState.stopAll()
+    audio.pause()
+    audio.currentTime = 0
     cancelAnimationFrame(animFrame)
     onAmplitude?.(0)
     URL.revokeObjectURL(url)
@@ -112,10 +111,6 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     if (!text.trim() || loading) return
     setInput('')
     setLoading(true)
-    // Signal activity so VoiceInterrupt won't interrupt for 3 minutes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__jarvisUserActive?.()
-    voiceState.stopAll() // stop any playing audio when user sends a message
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -202,14 +197,13 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript.toLowerCase().trim()
 
-      // Ignore if Jarvis is currently speaking — avoid picking up his own voice
-      if (voiceState.isSpeaking()) return
-
       const wakeDetected = WAKE_WORDS.some(w => transcript.includes(w))
 
       if (wakeDetected) {
-        // Stop any playing audio immediately when wake word detected
-        voiceState.stopAll()
+        // Stop Jarvis speaking if wake word heard mid-speech
+        stopSpeakRef.current?.()
+        stopSpeakRef.current = null
+        setSpeaking(false)
 
         let command = transcript
         for (const w of WAKE_WORDS) {
