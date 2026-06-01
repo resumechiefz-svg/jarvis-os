@@ -226,7 +226,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       // Only restart SpeechRecognition if Realtime voice is NOT active
       // Realtime handles all voice I/O when connected — running both causes dual audio
       restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current && !realtimeOpen) startWakeWordListener()
+        if (recognitionRef.current) startWakeWordListener()
       }, 300)
     }
 
@@ -236,7 +236,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         setListening(false)
       }
       restartTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current && !realtimeOpen) startWakeWordListener()
+        if (recognitionRef.current) startWakeWordListener()
       }, 1000)
     }
 
@@ -275,17 +275,25 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
   }, [analyzingImage, input, onMessage, onAgentChange, voiceEnabled, onAmplitude])
 
+  // Auto-start wake word listener on mount — this is the primary voice INPUT path
+  // It sends speech → send() → ElevenLabs TTS. No conflict with Realtime button.
+  useEffect(() => {
+    startWakeWordListener()
+    return () => {
+      recognitionRef.current = null
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleMic = useCallback(() => {
     if (listening) {
       recognitionRef.current = null
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
       setListening(false)
     } else {
-      // Don't start SpeechRecognition when Realtime is active — causes dual voice
-      if (realtimeOpen) return
       startWakeWordListener()
     }
-  }, [listening, realtimeOpen, startWakeWordListener])
+  }, [listening, startWakeWordListener])
 
   return (
     <div className="command-interface flex flex-col h-full">
