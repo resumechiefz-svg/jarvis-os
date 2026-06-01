@@ -13,9 +13,10 @@ interface Props {
   onTranscript: (text: string, role: 'user' | 'assistant', agent?: string) => void
   onStateChange?: (state: VoiceState) => void
   autoStart?: boolean
+  hidden?: boolean
 }
 
-export default function RealtimeVoice({ onTranscript, onStateChange, autoStart }: Props) {
+export default function RealtimeVoice({ onTranscript, onStateChange, autoStart, hidden }: Props) {
   const [state, setState] = useState<VoiceState>('idle')
   const [error, setError] = useState('')
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -186,19 +187,44 @@ Speak conversationally — short answers unless detail is requested.`,
 
   const cfg = stateConfig[state]
 
+  // Hidden mode — ambient dot in header, no button
+  if (hidden) {
+    const dotColor = state === 'listening' ? '#00ff88' : state === 'speaking' ? '#a855f7' : state === 'thinking' ? '#00d4ff' : state === 'error' ? '#ff4455' : '#ffffff22'
+    return (
+      <span
+        onClick={state === 'error' ? startSession : undefined}
+        title={cfg.label}
+        style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: dotColor,
+          display: 'inline-block', flexShrink: 0,
+          boxShadow: state !== 'idle' && state !== 'connecting' ? `0 0 6px ${dotColor}` : 'none',
+          animation: cfg.pulse ? 'voice-dot-pulse 1.5s ease-in-out infinite' : 'none',
+          cursor: state === 'error' ? 'pointer' : 'default',
+          transition: 'all 0.3s',
+        }}
+      >
+        <style>{`
+          @keyframes voice-dot-pulse {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+          }
+        `}</style>
+      </span>
+    )
+  }
+
+  // Full button mode (desktop HUD)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       <button
         onClick={state === 'idle' || state === 'error' ? startSession : stopSession}
         style={{
           width: 56, height: 56, borderRadius: '50%',
-          background: cfg.bg,
-          border: `1.5px solid ${cfg.border}`,
+          background: cfg.bg, border: `1.5px solid ${cfg.border}`,
           fontSize: 22, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           animation: cfg.pulse ? 'voice-pulse 1.5s ease-in-out infinite' : 'none',
-          transition: 'all 0.2s',
-          flexShrink: 0,
+          transition: 'all 0.2s', flexShrink: 0,
         }}
         title={cfg.label}
       >
@@ -206,14 +232,9 @@ Speak conversationally — short answers unless detail is requested.`,
           ? <span style={{ color: cfg.border, fontSize: 20, fontWeight: 700, animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
           : cfg.icon}
       </button>
-      <span style={{ fontSize: 9, color: cfg.border, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        {cfg.label}
-      </span>
+      <span style={{ fontSize: 9, color: cfg.border, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{cfg.label}</span>
       <style>{`
-        @keyframes voice-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 ${cfg.border}40; }
-          50% { box-shadow: 0 0 0 10px ${cfg.border}00; }
-        }
+        @keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 ${cfg.border}40; } 50% { box-shadow: 0 0 0 10px ${cfg.border}00; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>

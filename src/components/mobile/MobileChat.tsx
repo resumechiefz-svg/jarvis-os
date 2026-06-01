@@ -39,10 +39,8 @@ export default function MobileChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // Auto-start voice if launched from Siri shortcut (?voice=1)
-  const [autoVoice] = useState(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('voice') === '1'
-  )
+  // Always auto-start voice — Jarvis listens the moment you open it
+  const [autoVoice] = useState(true)
 
   const send = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
@@ -112,7 +110,17 @@ export default function MobileChat() {
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>AB COMMAND CENTER</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00ff88', display: 'inline-block', boxShadow: '0 0 6px #00ff88' }}/>
+          <Suspense fallback={<span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ffffff22', display: 'inline-block' }}/>}>
+            <RealtimeVoice hidden autoStart={autoVoice}
+              onTranscript={(text, role, agent) => {
+                if (role === 'user') setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
+                else {
+                  setMessages(m => [...m, { role: 'assistant', content: text, agent, ts: new Date() }])
+                  if (text.length > 20) fetch('/api/memory/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: 'conversation_summary', content: `[Voice] ${text.slice(0, 200)}`, context: text.slice(0, 300), importance: 6 }) }).catch(() => {})
+                }
+              }}
+            />
+          </Suspense>
           <span style={{ fontSize: 9, color: 'rgba(0,255,136,0.6)', letterSpacing: '0.1em' }}>ONLINE</span>
         </div>
       </div>
@@ -220,31 +228,6 @@ export default function MobileChat() {
             outline: 'none', fontFamily: 'inherit',
           }}
         />
-        {/* Realtime voice — transcripts saved to shared memory */}
-        <Suspense fallback={null}>
-          <RealtimeVoice autoStart={autoVoice}
-            onTranscript={(text, role, agent) => {
-              if (role === 'user') {
-                setMessages(m => [...m, { role: 'user', content: text, ts: new Date() }])
-              } else {
-                setMessages(m => [...m, { role: 'assistant', content: text, agent, ts: new Date() }])
-                // Save voice exchange to shared memory so desktop picks it up
-                if (text.length > 20) {
-                  fetch('/api/memory/search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      category: 'conversation_summary',
-                      content: `[Voice] ${text.slice(0, 200)}`,
-                      context: text.slice(0, 300),
-                      importance: 6,
-                    }),
-                  }).catch(() => {})
-                }
-              }
-            }}
-          />
-        </Suspense>
 
         <button
           onClick={() => send(input)}
