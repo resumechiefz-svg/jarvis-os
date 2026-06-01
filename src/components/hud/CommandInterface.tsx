@@ -353,103 +353,149 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
   }, [listening, startRecognition, stopRecognition])
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render — slim command bar ─────────────────────────────────────────────────
 
   return (
-    <div className="command-interface flex flex-col h-full">
-      <div ref={messagesRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
-        {messages.length === 0 && !loading && (
-          <div className="flex items-center gap-3 py-1 select-none">
-            <div className="text-[11px] text-cyan-500/30 tracking-widest uppercase">AB Command Center</div>
-            <div className="text-[11px] text-white/10 tracking-widest">NOVA ● SAGE ● VAULT ● ECHO ● ATLAS ● 13 AGENTS ONLINE</div>
-          </div>
-        )}
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            {msg.role === 'assistant' && (
-              <div className="text-[11px] font-bold tracking-wider shrink-0 pt-1" style={{ color: AGENT_COLORS[msg.agent] ?? '#00d4ff' }}>
-                [{msg.agent.toUpperCase()}]
-              </div>
-            )}
-            <div
-              className={`text-[12px] leading-relaxed max-w-[75%] px-3 py-1.5 rounded ${msg.role === 'user' ? 'bg-cyan-900/30 text-cyan-200 text-right' : 'bg-white/5 text-white/80'}`}
-              style={msg.role === 'assistant' ? { borderLeft: `2px solid ${AGENT_COLORS[msg.agent] ?? '#00d4ff'}` } : {}}
-            >
-              <pre className="whitespace-pre-wrap font-mono text-[12px]">{msg.content}</pre>
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex gap-2">
-            <div className="text-[11px] font-bold tracking-wider text-cyan-400">[JARVIS]</div>
-            <div className="text-[12px] text-white/40 flex gap-1 pt-1">
-              <span className="animate-bounce">.</span>
-              <span className="animate-bounce" style={{ animationDelay: '0.1s' }}>.</span>
-              <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>.</span>
-            </div>
-          </div>
-        )}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+
+      {/* Last response toast — shows most recent agent reply */}
+      {messages.length > 0 && (
+        <div style={{
+          padding: '4px 16px', borderBottom: '1px solid rgba(0,212,255,0.06)',
+          display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0,
+          background: 'rgba(0,3,10,0.8)', overflow: 'hidden',
+        }}>
+          {loading ? (
+            <span style={{ fontSize: 11, color: 'rgba(0,212,255,0.5)', fontFamily: 'monospace' }}>
+              ● processing...
+            </span>
+          ) : (() => {
+            const last = [...messages].reverse().find(m => m.role === 'assistant')
+            if (!last) return null
+            const color = AGENT_COLORS[last.agent] ?? '#00d4ff'
+            return (
+              <>
+                <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '0.15em', flexShrink: 0 }}>
+                  [{last.agent.toUpperCase()}]
+                </span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
+                  {last.content.replace(/\*+/g, '').split('\n')[0].slice(0, 180)}
+                </span>
+              </>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Quick commands */}
-      <div className="px-4 py-1.5 flex gap-2 flex-wrap">
+      <div style={{ display: 'flex', gap: 6, padding: '4px 12px', flexWrap: 'wrap', flexShrink: 0, borderBottom: '1px solid rgba(0,212,255,0.04)' }}>
         {QUICK_COMMANDS.map(qc => (
-          <button key={qc.label} onClick={() => send(qc.command)}
-            className="text-[10px] tracking-wider px-2 py-0.5 border border-cyan-900/50 text-cyan-500/60 hover:text-cyan-300 hover:border-cyan-600 transition-colors uppercase">
+          <button key={qc.label} onClick={() => send(qc.command)} style={{
+            fontSize: 9, padding: '2px 8px', border: '1px solid rgba(0,212,255,0.15)',
+            background: 'transparent', color: 'rgba(0,212,255,0.4)',
+            cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase',
+            transition: 'all 0.15s', borderRadius: 2, fontFamily: 'inherit',
+          }}>
             {qc.label}
           </button>
         ))}
       </div>
 
       {/* Hidden file input */}
-      <input ref={imageInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv" className="hidden"
+      <input ref={imageInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = '' }} />
 
-      {/* Input row */}
-      <div className="px-4 pb-3 flex gap-2 items-stretch">
-        <div className="flex-1 flex items-center border border-cyan-800/50 bg-black/40 px-3">
-          <span className="text-cyan-500/50 text-[11px] mr-2 font-mono">{'>'}</span>
+      {/* Main input row */}
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, padding: '6px 12px', flex: 1 }}>
+        {/* Status dot */}
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 4 }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: listening ? '#00ff88' : speaking ? '#a855f7' : loading ? '#00d4ff' : 'rgba(255,255,255,0.1)',
+            boxShadow: listening ? '0 0 8px #00ff88' : speaking ? '0 0 8px #a855f7' : 'none',
+            animation: (listening || speaking || loading) ? 'voice-dot-pulse 1.5s infinite' : 'none',
+            transition: 'all 0.3s',
+          }} />
+        </div>
+
+        {/* Input */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', border: '1px solid rgba(0,212,255,0.2)', background: 'rgba(0,212,255,0.03)', padding: '0 12px', borderRadius: 2 }}>
+          <span style={{ fontSize: 11, color: 'rgba(0,212,255,0.3)', marginRight: 8, fontFamily: 'monospace' }}>›</span>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send(input)}
-            placeholder={listening ? '🎙 Listening for "Hey Jarvis"...' : 'Type or say "Hey Jarvis"...'}
-            className="flex-1 bg-transparent text-[13px] text-cyan-200 placeholder:text-cyan-800/60 outline-none font-mono py-2"
+            placeholder={listening ? '🎙  Listening... say "Hey Jarvis"' : speaking ? '🔊  Speaking...' : 'Command Jarvis or type anything...'}
             disabled={loading}
             autoFocus
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              color: '#cce8ff', fontSize: 13, fontFamily: 'monospace',
+              caretColor: '#00d4ff',
+            }}
           />
         </div>
 
-        <button onClick={() => imageInputRef.current?.click()} disabled={analyzingImage}
-          className={`px-3 border transition-colors flex items-center gap-1.5 ${analyzingImage ? 'border-yellow-500/70 text-yellow-400 bg-yellow-900/20 animate-pulse' : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'}`}
-          title="Upload photo, PDF, or doc">
-          <Camera size={14} />
-          <span className="text-[10px] font-mono tracking-wider">FILE</span>
-        </button>
-
-        {speaking && (
-          <button onClick={() => { currentAudioRef.current?.pause(); currentAudioRef.current = null; setSpeaking(false); micMutedRef.current = false; startRecognition() }}
-            className="px-3 border border-red-500/70 text-red-400 bg-red-900/20 animate-pulse transition-colors"
-            title="Stop Jarvis">
-            <Square size={14} />
+        {/* Controls */}
+        {[
+          {
+            show: true,
+            onClick: () => imageInputRef.current?.click(),
+            disabled: analyzingImage,
+            title: 'Upload file',
+            content: <Camera size={13} />,
+            active: analyzingImage,
+            activeColor: '#fbbf24',
+          },
+          {
+            show: speaking,
+            onClick: () => { currentAudioRef.current?.pause(); currentAudioRef.current = null; setSpeaking(false); micMutedRef.current = false; startRecognition() },
+            disabled: false,
+            title: 'Stop Jarvis',
+            content: <Square size={13} />,
+            active: true,
+            activeColor: '#ff4455',
+          },
+          {
+            show: true,
+            onClick: () => { setVoiceEnabled(v => !v); voiceEnabledRef.current = !voiceEnabledRef.current },
+            disabled: false,
+            title: voiceEnabled ? 'Mute' : 'Unmute',
+            content: voiceEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />,
+            active: voiceEnabled,
+            activeColor: '#00d4ff',
+          },
+          {
+            show: true,
+            onClick: toggleMic,
+            disabled: false,
+            title: listening ? 'Mic on' : 'Mic off',
+            content: listening ? <Mic size={13} /> : <MicOff size={13} />,
+            active: listening || triggered,
+            activeColor: triggered ? '#00d4ff' : '#00ff88',
+          },
+        ].filter(b => b.show).map((btn, i) => (
+          <button key={i} onClick={btn.onClick} disabled={btn.disabled} title={btn.title}
+            style={{
+              padding: '0 10px', border: `1px solid ${btn.active ? btn.activeColor + '50' : 'rgba(0,212,255,0.12)'}`,
+              background: btn.active ? `${btn.activeColor}12` : 'transparent',
+              color: btn.active ? btn.activeColor : 'rgba(255,255,255,0.3)',
+              cursor: 'pointer', borderRadius: 2, display: 'flex', alignItems: 'center',
+              transition: 'all 0.2s', animation: btn.active && btn.activeColor === '#ff4455' ? 'voice-dot-pulse 1s infinite' : 'none',
+            }}>
+            {btn.content}
           </button>
-        )}
-
-        <button onClick={() => { setVoiceEnabled(v => !v); voiceEnabledRef.current = !voiceEnabledRef.current }}
-          className={`px-3 border transition-colors ${voiceEnabled ? 'border-cyan-700/50 text-cyan-400 bg-black/40' : 'border-white/10 text-white/20 bg-black/40'}`}
-          title={voiceEnabled ? 'Mute Jarvis' : 'Unmute Jarvis'}>
-          {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-        </button>
-
-        <button onClick={toggleMic}
-          className={`px-3 border transition-colors ${triggered ? 'border-cyan-300 text-cyan-200 bg-cyan-900/50 animate-pulse' : listening ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 bg-black/40'}`}
-          title={listening ? 'Mic on — say "Hey Jarvis"' : 'Mic off'}>
-          {listening ? <Mic size={14} /> : <MicOff size={14} />}
-        </button>
+        ))}
 
         <button onClick={() => send(input)} disabled={loading || !input.trim()}
-          className="px-4 text-[12px] font-bold tracking-widest bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 hover:bg-cyan-800/40 disabled:opacity-30 transition-colors uppercase">
+          style={{
+            padding: '0 16px', background: 'rgba(0,212,255,0.1)',
+            border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff',
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase',
+            cursor: 'pointer', borderRadius: 2, opacity: (loading || !input.trim()) ? 0.3 : 1,
+            transition: 'all 0.2s', fontFamily: 'inherit',
+          }}>
           Send
         </button>
       </div>

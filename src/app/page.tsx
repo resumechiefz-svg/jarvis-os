@@ -4,19 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import MobileChat from '@/components/mobile/MobileChat'
 import AgentBar from '@/components/hud/AgentBar'
-import NewsTicker from '@/components/hud/NewsTicker'
-import ForgeBuildMonitor from '@/components/hud/ForgeBuildMonitor'
 import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
-import GoalOne from '@/components/hud/GoalOne'
-import PushToggle from '@/components/hud/PushToggle'
 import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
-
-const CommandInterface = dynamic(() => import('@/components/hud/CommandInterface'), { ssr: false })
-const JarvisGreeting = dynamic(() => import('@/components/hud/JarvisGreeting'), { ssr: false })
-const ScreenAwareness = dynamic(() => import('@/components/hud/ScreenAwareness'), { ssr: false })
+import LiveFeed from '@/components/hud/LiveFeed'
 import type { Message, AgentName } from '@/lib/types'
 
+const CommandInterface = dynamic(() => import('@/components/hud/CommandInterface'), { ssr: false })
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
 
 const AGENT_COLORS: Record<string, string> = {
@@ -26,117 +20,174 @@ const AGENT_COLORS: Record<string, string> = {
 }
 
 export default function HUD() {
-  // ALL hooks must be at top — before any conditional returns (React rules)
   const [isMobile, setIsMobile] = useState(false)
+  const [isExtended, setIsExtended] = useState(false) // dual monitor detected
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
-  const [orbActive, setOrbActive] = useState(false)
   const [orbAmplitude, setOrbAmplitude] = useState(0)
-  const [booting, setBooting] = useState(true)
   const [mrr, setMrr] = useState(0)
-  const amplitudeRef = useRef(0)
 
   useEffect(() => {
-    setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
-  }, [])
+    const mobile = window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    setIsMobile(mobile)
 
-  const handleAmplitude = useCallback((val: number) => {
-    amplitudeRef.current = val
-    setOrbAmplitude(val)
-  }, [])
-
-  useEffect(() => {
+    // Detect dual/extended displays (Chrome 100+ supports screen.isExtended)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = screen as any
+    if (s.isExtended !== undefined) {
+      setIsExtended(s.isExtended)
+      // Listen for screen changes (plug/unplug monitor)
+      if (typeof s.addEventListener === 'function') {
+        const handler = () => setIsExtended(s.isExtended)
+        s.addEventListener('change', handler)
+        return () => s.removeEventListener('change', handler)
+      }
+    }
     fetch('/api/nova').then(r => r.json()).then(d => { if (d?.mrr !== undefined) setMrr(d.mrr) }).catch(() => {})
-    const timer = setTimeout(() => setBooting(false), 2500)
-    return () => clearTimeout(timer)
   }, [])
 
-  const handleMessage = useCallback((msg: Message) => {
-    setMessages(prev => [...prev, msg])
-    if (msg.role === 'user') setOrbActive(true)
-    else setOrbActive(false)
-  }, [])
-
-  const handleAgentChange = useCallback((agent: AgentName) => {
-    setActiveAgent(agent)
-  }, [])
-
+  const handleAmplitude = useCallback((val: number) => setOrbAmplitude(val), [])
+  const handleMessage = useCallback((msg: Message) => setMessages(prev => [...prev, msg]), [])
+  const handleAgentChange = useCallback((agent: AgentName) => setActiveAgent(agent), [])
   const agentColor = AGENT_COLORS[activeAgent] ?? '#00d4ff'
 
-  // Mobile: show clean chat only
   if (isMobile) return <MobileChat />
 
   return (
-    <div className="hud-root">
-      {/* Background systems — invisible, always running */}
-      <VoiceInterrupt onMessage={msg => handleMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: msg, timestamp: new Date() })} />
+    <>
+      <style>{`
+        :root {
+          --bg: #020810;
+          --panel-w: clamp(220px, 22vw, 380px);
+          --bar-h: clamp(32px, 3vh, 42px);
+          --cmd-h: clamp(56px, 7vh, 80px);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; background: var(--bg); font-family: 'Courier New', monospace; }
+        .hud-root {
+          display: grid;
+          grid-template-columns: var(--panel-w) 1fr var(--panel-w);
+          grid-template-rows: var(--bar-h) 1fr var(--cmd-h);
+          height: 100vh; width: 100vw;
+          background: var(--bg); overflow: hidden;
+        }
+        /* Fluid scrollbars */
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 2px; }
+        @keyframes voice-dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes feedIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes scan { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+      `}</style>
 
-      {/* Row 1: Agent status bar */}
-      <AgentBar activeAgent={activeAgent} />
+      <VoiceInterrupt onMessage={msg => handleMessage({
+        id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: msg, timestamp: new Date()
+      })} />
 
-      {/* Row 2 Left: Live data panels */}
-      <LeftPanel />
+      <div className="hud-root">
 
-      {/* Row 2 Center: Orb + Goal */}
-      <div className="center-panel">
-        {/* Orb */}
-        <div className="relative shrink-0">
-          <JarvisOrb active={orbActive} agentColor={agentColor} amplitude={orbAmplitude} />
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-            <div
-              className="text-[10px] font-bold tracking-[0.4em] uppercase"
-              style={{ color: agentColor, textShadow: `0 0 12px ${agentColor}` }}
-            >
-              {activeAgent.toUpperCase()}
+        {/* ── Agent bar — full width ── */}
+        <div style={{ gridColumn: '1/-1', gridRow: 1, borderBottom: '1px solid rgba(0,212,255,0.08)' }}>
+          <AgentBar activeAgent={activeAgent} />
+        </div>
+
+        {/* ── Left panel ── */}
+        <div style={{
+          gridColumn: 1, gridRow: 2,
+          borderRight: '1px solid rgba(0,212,255,0.08)',
+          background: 'rgba(0,6,18,0.92)', overflowY: 'auto', overflowX: 'hidden',
+        }}>
+          <LeftPanel />
+        </div>
+
+        {/* ── Center: Jarvis + live feed ── */}
+        <div style={{
+          gridColumn: 2, gridRow: 2,
+          display: 'flex', flexDirection: 'column',
+          background: 'rgba(0,3,10,0.95)', overflow: 'hidden',
+          position: 'relative',
+        }}>
+          {/* Orb — centered, scales with viewport */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: 'clamp(8px,2vh,20px) 0 0',
+            flexShrink: 0, position: 'relative',
+          }}>
+            {/* Agent label above */}
+            <div style={{
+              fontSize: 'clamp(8px,0.7vw,11px)', letterSpacing: '0.3em',
+              color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 6,
+            }}>
+              JARVIS OS — AB COMMAND CENTER
             </div>
-            <div className="text-[7px] tracking-widest text-white/25 mt-0.5">
-              {orbActive ? 'PROCESSING' : booting ? 'BOOTING' : 'STANDBY'}
+
+            {/* Orb — size scales with viewport */}
+            <div style={{ position: 'relative', lineHeight: 0 }}>
+              <JarvisOrb
+                active={messages.some(m => m.role === 'user')}
+                agentColor={agentColor}
+                amplitude={orbAmplitude}
+                size={Math.min(Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1400) * 0.16), 300)}
+              />
+              {/* Agent name below orb */}
+              <div style={{
+                position: 'absolute', bottom: -20, left: 0, right: 0,
+                textAlign: 'center',
+                fontSize: 'clamp(9px,0.8vw,12px)', fontWeight: 700,
+                letterSpacing: '0.4em', textTransform: 'uppercase',
+                color: agentColor, textShadow: `0 0 12px ${agentColor}80`,
+              }}>
+                {activeAgent}
+              </div>
             </div>
           </div>
+
+          {/* Live intelligence feed below orb */}
+          <div style={{ flex: 1, overflow: 'hidden', marginTop: 24 }}>
+            <LiveFeed messages={messages} />
+          </div>
+
+          {/* Dual monitor banner — suggest opening workspace on MacBook */}
+          {isExtended && (
+            <div style={{
+              position: 'absolute', top: 8, right: 8,
+              fontSize: 9, letterSpacing: '0.12em',
+              border: '1px solid rgba(0,212,255,0.2)',
+              padding: '3px 10px', color: 'rgba(0,212,255,0.5)',
+              background: 'rgba(0,212,255,0.04)', borderRadius: 2,
+              cursor: 'pointer',
+            }}
+              onClick={() => window.open('/workspace', '_blank')}
+            >
+              DUAL MONITOR — OPEN WORKSPACE ON MACBOOK →
+            </div>
+          )}
         </div>
 
-        {/* Goal 1 — directly under the orb */}
-        <GoalOne mrr={mrr} />
-      </div>
-
-      {/* Row 2 Right: Kalshi + financials */}
-      <RightPanel activeAgent={activeAgent} mrr={mrr} />
-
-      {/* Row 3: News ticker (moved from top) */}
-      <ForgeBuildMonitor />
-      <NewsTicker />
-
-      {/* Jarvis greeting + predictive suggestions */}
-      <JarvisGreeting onSuggestionClick={text => handleMessage({ id: Date.now().toString(), role: 'user', agent: 'jarvis', content: text, timestamp: new Date() })} />
-
-      {/* Row 4: Command interface */}
-      <CommandInterface
-        messages={messages}
-        onMessage={handleMessage}
-        onAgentChange={handleAgentChange}
-        onAmplitude={handleAmplitude}
-      />
-
-      {/* Row 5: Footer */}
-      <div className="hud-footer flex items-center justify-between px-4">
-        <span className="text-[8px] tracking-[0.2em] text-cyan-950 uppercase">
-          JARVIS OS v2.0 — AB COMMAND CENTER
-        </span>
-        <div className="flex items-center gap-3">
-          <ScreenAwareness onInsight={text => handleMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: text, timestamp: new Date() })} />
-          <PushToggle />
-          {[
-            { label: 'Workspace', href: '/workspace' },
-            { label: 'Ideas', href: '/ideas' },
-            { label: 'Acquisition', href: '/acquisition' },
-            { label: 'Health', href: '/health' },
-          ].map(l => (
-            <a key={l.href} href={l.href} className="text-[8px] text-cyan-900 hover:text-cyan-600 uppercase tracking-wider transition-colors">
-              {l.label} →
-            </a>
-          ))}
+        {/* ── Right panel ── */}
+        <div style={{
+          gridColumn: 3, gridRow: 2,
+          borderLeft: '1px solid rgba(0,212,255,0.08)',
+          background: 'rgba(0,6,18,0.92)', overflowY: 'auto',
+        }}>
+          <RightPanel activeAgent={activeAgent} mrr={mrr} />
         </div>
+
+        {/* ── Command bar — full width ── */}
+        <div style={{
+          gridColumn: '1/-1', gridRow: 3,
+          borderTop: '1px solid rgba(0,212,255,0.12)',
+          background: 'rgba(0,2,8,0.98)',
+        }}>
+          <CommandInterface
+            messages={messages}
+            onMessage={handleMessage}
+            onAgentChange={handleAgentChange}
+            onAmplitude={handleAmplitude}
+          />
+        </div>
+
       </div>
-    </div>
+    </>
   )
 }
