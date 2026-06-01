@@ -67,57 +67,164 @@ export interface VideoPackage {
   youtubeId?: string
 }
 
+// Content formats that actually perform
+type ContentFormat = 'screen_demo' | 'talking_points' | 'before_after' | 'myth_bust' | 'story' | 'shorts'
+
 export async function generateScript(
   channel: 'cardchiefz' | 'resumechiefz',
   topic?: string,
-  theme?: string // e.g. 'lego', 'cinematic', 'anime'
+  theme?: string,
+  format?: ContentFormat
 ): Promise<VideoPackage> {
 
-  const channelContext = channel === 'cardchiefz'
-    ? 'Card Chiefz — sports card collecting, eBay selling, PSA grading, card investment'
-    : 'ResumeChiefz — job searching, resume writing, ATS, career advice from a real recruiter'
+  // First: let Claude decide what format + topic will actually get views
+  const strategyMsg = await claude.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 300,
+    messages: [{
+      role: 'user',
+      content: `You're a YouTube strategist who knows what actually gets views in 2026.
 
-  // Let Claude pick the best topic if not specified
-  const topicPrompt = topic
-    ? `Topic: "${topic}"`
-    : `Pick the best topic right now for ${channelContext}. Think about what people are actively searching for, what's timely, and what would genuinely help the audience. Be specific.`
+Channel: ResumeChiefz (AI resume builder, real recruiter behind it, $7.99/mo)
+User request: "${topic ?? 'pick the best performing topic right now'}"
+
+What format + angle would genuinely perform right now? Choose from:
+- screen_demo: Show the product being used (authentic, converts)
+- talking_points: Bold takes, contrarian, information people don't know
+- before_after: Bad resume → RC version (visual transformation)
+- myth_bust: Debunk common resume/job search myths with receipts
+- story: A job seeker's experience, narrative format
+- shorts: 60-second punch, designed for Shorts/Reels distribution
+
+Think about: what's someone searching at 11pm when they just got laid off? What would stop the scroll?
+What's the hook that makes someone feel like this was made for them?
+
+Return JSON: {"format": "...", "topic": "specific topic", "hook": "the first 15 seconds opener", "angle": "what makes this different from every other resume video"}`,
+    }],
+  })
+
+  let strategy = { format: 'talking_points', topic: topic ?? 'Why your resume never gets a response', hook: '', angle: '' }
+  try {
+    const t = strategyMsg.content[0].type === 'text' ? strategyMsg.content[0].text : '{}'
+    const m = t.match(/\{[\s\S]*\}/)
+    if (m) strategy = { ...strategy, ...JSON.parse(m[0]) }
+  } catch { /* use defaults */ }
+
+  const selectedFormat = format ?? strategy.format as ContentFormat
+  const selectedTopic = strategy.topic
+
+  // Build scene prompts based on format
+  const formatInstructions: Record<ContentFormat, string> = {
+    screen_demo: `This is a screen recording style video showing someone using ResumeChiefz live.
+Scenes should look like: actual resume builder UI, typing happening, ATS score improving, real results appearing.
+Image prompts should show: clean dark-mode UI, someone's hands on a keyboard, resume sections filling in, before/after comparisons.
+Feel: authentic product walkthrough, like a friend showing you something that worked for them.`,
+
+    talking_points: `Bold, punchy talking head style (faceless — just text + visuals).
+Scenes: bold text statements on dark background, supporting visuals, data/stats shown visually.
+Image prompts: clean graphic design, bold typography mockups, workplace scenes, hiring manager at a desk, email inbox visuals.
+Feel: someone who knows exactly why you're not getting callbacks and isn't softening it.`,
+
+    before_after: `Visual transformation video. Side by side comparisons.
+Scenes: terrible resume → what's wrong → RC fixes it → improved version → result.
+Image prompts: split screen layouts, red X marks turning to green checks, resume documents, hiring manager reactions.
+Feel: satisfying transformation, like a home renovation but for your career.`,
+
+    myth_bust: `Debunking format. Each scene addresses a common myth.
+Scenes: myth stated, "Actually..." moment, the real data, what to do instead.
+Image prompts: crossed-out text, surprised reactions, graphs/charts, job boards, recruiter at their desk.
+Feel: insider info being revealed, things you weren't supposed to know.`,
+
+    story: `Narrative format following a job seeker's journey.
+Scenes: relatable struggle → discovery of RC → building resume → applying → getting callback → success.
+Image prompts: person at laptop at night, rejection emails, RC interface, excited reaction, phone call, celebration.
+Feel: emotional arc, someone who gets it because they lived it.`,
+
+    shorts: `60-90 seconds max. Vertical format (9:16). One punchy point.
+Only 8-10 scenes, each 5-8 seconds.
+Image prompts: high contrast, bold text overlays, mobile-first composition, nothing in bottom 20% (UI covers it).
+Feel: stops the scroll in the first 2 seconds or dies.`,
+  }
+
+  const sceneCount = selectedFormat === 'shorts' ? 10 : 20
+  const scriptLength = selectedFormat === 'shorts' ? '300-400 words' : '2,500-3,500 words'
 
   const msg = await claude.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4000,
     messages: [{
       role: 'user',
-      content: `You are writing and directing a faceless YouTube video.
+      content: `Write a YouTube video script that will actually get views.
 
-Channel: ${channelContext}
-${topicPrompt}
-Visual theme: ${theme ?? 'cinematic, high quality, photorealistic'}
+Topic: "${selectedTopic}"
+Format: ${selectedFormat}
+Hook (use this or improve it): "${strategy.hook}"
+What makes this different: "${strategy.angle}"
+Theme for images: ${theme ?? 'modern, clean, professional but human — not stock photo corporate'}
 
-Write a complete ~3,000 word script broken into exactly 20 scenes. Each scene is 5-10 seconds of narration with a matching visual.
+${formatInstructions[selectedFormat]}
 
-Voice style: Casual, intelligent, accurate. Sounds like the most knowledgeable person on this topic who doesn't need to prove it. No robotic intros, no "smash subscribe."
+VOICE — non-negotiable:
+Write like a real person. Casual but sharp. The kind of video where someone thinks "finally, someone said this."
+No "In this video I'll show you." No robotic structure. Start with the hook, earn every second after that.
+If it's funny, be genuinely funny — not try-hard. If it's serious, be actually serious.
+Use contractions. Use short sentences when making a point. Be willing to say something slightly controversial if it's true.
 
-For each scene provide:
-- narration: what gets spoken (1-3 sentences, punchy)
-- imagePrompt: detailed visual prompt for AI image generation. Include the theme style: "${theme ?? 'cinematic photorealistic'}". Be very specific — lighting, composition, what's in frame.
-- motionPrompt: how the image should animate (camera pan, zoom, particles, etc.)
+Script length: ${scriptLength}
+Scenes: exactly ${sceneCount}
+
+For each scene:
+- narration: what gets spoken. Real talk, no padding.
+- imagePrompt: what Google Imagen should generate. Be extremely specific — style, lighting, what's visible, composition. Include "${theme ?? 'modern clean aesthetic, photorealistic'}".
+- motionPrompt: animation direction (slow push in, drift left, particles, etc.)
 
 Return JSON:
 {
-  "title": "SEO-optimized title with keyword in first 3 words",
-  "description": "YouTube description, 200 words, keyword-rich",
-  "tags": ["10 tags"],
-  "script": "full script as one continuous block",
-  "scenes": [
-    {
-      "id": 1,
-      "narration": "...",
-      "imagePrompt": "...",
-      "motionPrompt": "slow zoom in, dust particles floating",
-      "wordCount": 25
-    }
-  ]
+  "title": "title that would make YOU click if you were job hunting at midnight",
+  "description": "YouTube description 200 words, SEO but readable",
+  "tags": ["10 specific tags"],
+  "format": "${selectedFormat}",
+  "script": "full continuous script",
+  "scenes": [{"id": 1, "narration": "...", "imagePrompt": "...", "motionPrompt": "...", "wordCount": 25}]
 }`,
+    }],
+  })
+
+  const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
+  const match = text.match(/\{[\s\S]*\}/)
+  const data = match ? JSON.parse(match[0]) : {}
+
+  const scenes: Scene[] = (data.scenes ?? []).map((s: Scene) => ({
+    ...s,
+    wordCount: s.wordCount ?? s.narration?.split(' ').length ?? 20,
+    durationEstimate: Math.max(5, Math.round((s.wordCount ?? 20) / 2.5)),
+  }))
+
+  const id = `video_${Date.now()}`
+  const buildDir = path.join(process.env.HOME ?? '/tmp', 'jarvis-videos', id)
+  fs.mkdirSync(buildDir, { recursive: true })
+  fs.mkdirSync(path.join(buildDir, 'images'), { recursive: true })
+  fs.mkdirSync(path.join(buildDir, 'clips'), { recursive: true })
+
+  const pkg: VideoPackage = {
+    id,
+    channel,
+    title: data.title ?? selectedTopic,
+    description: data.description ?? '',
+    tags: data.tags ?? [],
+    script: data.script ?? '',
+    scenes,
+    theme,
+    buildDir,
+    status: 'scripted',
+  }
+
+  fs.writeFileSync(path.join(buildDir, 'scene-prompts.json'), JSON.stringify(pkg, null, 2))
+  await saveVideoPackage(pkg)
+
+  await slack(`📝 *Script ready — "${pkg.title}"*\nFormat: ${selectedFormat} | ${pkg.scenes.length} scenes\nAngle: ${strategy.angle}\n\nStarting image generation...`)
+  return pkg
+},
     }],
   })
 
@@ -188,19 +295,38 @@ async function generateImageReplicate(prompt: string, outputPath: string): Promi
   throw new Error('Replicate timed out')
 }
 
-async function generateImageDalle(prompt: string, outputPath: string): Promise<void> {
-  const response = await openai.images.generate({
-    model: 'dall-e-3',
-    prompt: prompt.slice(0, 4000),
-    size: '1792x1024',
-    quality: 'standard',
-    n: 1,
-  })
-  const url = response.data?.[0]?.url
-  if (!url) throw new Error('DALL-E returned no image URL')
-  const imgRes = await fetch(url)
-  const buffer = Buffer.from(await imgRes.arrayBuffer())
-  fs.writeFileSync(outputPath, buffer)
+async function generateImageWithImagen(prompt: string, outputPath: string): Promise<void> {
+  const apiKey = process.env.GOOGLE_IMAGEN_API_KEY ?? process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_IMAGEN_API_KEY not set')
+
+  const models = [
+    'imagen-4.0-generate-001',
+    'imagen-3.0-generate-001',
+    'imagen-3.0-fast-generate-001',
+  ]
+
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: { sampleCount: 1, aspectRatio: '16:9', safetyFilterLevel: 'block_only_high' },
+          }),
+        }
+      )
+      if (!res.ok) continue
+      const data = await res.json() as { predictions?: Array<{ bytesBase64Encoded?: string }> }
+      const b64 = data?.predictions?.[0]?.bytesBase64Encoded
+      if (!b64) continue
+      fs.writeFileSync(outputPath, Buffer.from(b64, 'base64'))
+      return
+    } catch { continue }
+  }
+  throw new Error('All Imagen models failed')
 }
 
 export async function generateImages(pkg: VideoPackage): Promise<VideoPackage> {
@@ -214,7 +340,7 @@ export async function generateImages(pkg: VideoPackage): Promise<VideoPackage> {
       if (REPLICATE_KEY) {
         await generateImageReplicate(scene.imagePrompt, imgPath)
       } else {
-        await generateImageDalle(scene.imagePrompt, imgPath)
+        await generateImageWithImagen(scene.imagePrompt, imgPath)
       }
       await new Promise(r => setTimeout(r, 1000)) // Rate limit buffer
     } catch (err) {
