@@ -20,13 +20,17 @@ async function slack(text: string) {
 
 interface Opportunity {
   title: string
-  type: 'card_market' | 'rc_growth' | 'content' | 'product' | 'partnership' | 'trading'
-  urgency: 'immediate' | 'this_week' | 'this_month'
+  type: string
+  urgency: 'immediate' | 'this_week' | 'this_month' | 'strategic'
   estimatedRevenue: string
   confidence: 'high' | 'medium' | 'low'
+  whyNow?: string
+  relatedToCurrentBiz?: boolean
   executionPlan: string[]
+  resourcesNeeded?: string[]
   timeToRevenue: string
   effortLevel: 'low' | 'medium' | 'high'
+  biggestRisk?: string
 }
 
 export async function scanForOpportunities(): Promise<void> {
