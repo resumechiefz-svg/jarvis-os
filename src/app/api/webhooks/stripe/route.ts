@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
 
-      // New customer signed up → welcome email
+      // New customer signed up → welcome email + enroll in sequence
       case 'customer.created': {
         const customer = event.data.object as Stripe.Customer
         if (!customer.email) break
@@ -64,6 +64,11 @@ export async function POST(req: NextRequest) {
         const { subject, html } = welcomeEmail(name)
         await sendEmail(customer.email, subject, html)
         await notifySlack(`📧 *New RC signup* — ${customer.email}\nWelcome email sent automatically.`)
+
+        // Enroll in 30-day email sequence
+        import('@/lib/agents/email-sequences').then(({ enrollInSequence }) =>
+          enrollInSequence(customer.email!, name).catch(() => {})
+        ).catch(() => {})
         break
       }
 

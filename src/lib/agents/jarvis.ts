@@ -336,6 +336,13 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
+  // ── Enrich context with new intelligence layers ───────────
+  const [sentimentCtx, intentionCtx, whoopCtx] = await Promise.all([
+    import('./sentiment-tracker').then(({ getCurrentSentimentContext }) => getCurrentSentimentContext()).catch(() => ''),
+    import('./weekly-intention').then(({ getIntentionContext }) => getIntentionContext()).catch(() => ''),
+    import('./whoop').then(({ getWhoopContext }) => getWhoopContext()).catch(() => ''),
+  ])
+
   // ── Load AB's living profile ──────────────────────────────
   let profileCtx = ''
   try {
@@ -380,9 +387,11 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   // When routing to a specific agent, let them speak in their own voice
   const isDirectRoute = route !== 'jarvis' && agentIntel
+  const enrichment = sentimentCtx + intentionCtx + whoopCtx
+
   const systemPrompt = isDirectRoute
-    ? (AGENT_SYSTEMS[route] ?? JARVIS_SYSTEM) + getAgentPersonalityPrompt(route) + context + profileCtx + beckettCtx + semanticCtx + liveData
-    : JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + agentIntel +
+    ? (AGENT_SYSTEMS[route] ?? JARVIS_SYSTEM) + getAgentPersonalityPrompt(route) + context + profileCtx + beckettCtx + semanticCtx + liveData + enrichment
+    : JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + enrichment + agentIntel +
       (agentIntel ? `\n\nDeliver as JARVIS — synthesized, crisp, in your voice. Call AB "sir" or "AB".` : '')
 
   const response = await anthropic.messages.create({
@@ -394,23 +403,45 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   const reply = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // Save conversation with vector embedding async — don't block response
+  // ── Post-response async enrichment — non-blocking ────────
   if (userMessage.length > 20) {
-    void saveMemory({
-      category: 'conversation_summary',
-      content: userMessage.slice(0, 200),
-      context: reply.slice(0, 300),
-      importance: 6,
-    }).catch(() => {
-      // Fallback to plain insert if embedding fails
-      void supabaseAdmin.from('ai_memories').insert({
+    Promise.all([
+      // Save to vector memory
+      saveMemory({
+        category: 'conversation_summary',
+        content: userMessage.slice(0, 200),
+        context: reply.slice(0, 300),
+        importance: 6,
+      }).catch(() => supabaseAdmin.from('ai_memories').insert({
         category: 'conversation_summary',
         content: userMessage.slice(0, 200),
         context: reply.slice(0, 300),
         importance: 6,
         created_at: new Date().toISOString(),
-      })
-    })
+      })),
+
+      // Detect and log decisions
+      import('./decision-journal').then(({ detectAndLogDecision }) =>
+        detectAndLogDecision(userMessage, reply).catch(() => {})
+      ).catch(() => {}),
+
+      // Detect contact mentions
+      import('./relationship-tracker').then(({ detectContactMention }) =>
+        detectContactMention(userMessage, reply).catch(() => {})
+      ).catch(() => {}),
+
+      // Append to Google Docs conversation log
+      import('./convo-to-docs').then(({ appendConversationToDoc }) =>
+        appendConversationToDoc(userMessage, reply, telemetryAgent).catch(() => {})
+      ).catch(() => {}),
+
+      // Analyze sentiment from user message
+      import('./sentiment-tracker').then(async ({ analyzeSentiment, saveSentimentReading }) => {
+        const msgs = history.slice(-5).map(h => h.content).concat(userMessage)
+        const reading = await analyzeSentiment(msgs)
+        if (reading) await saveSentimentReading(reading)
+      }).catch(() => {}),
+    ]).catch(() => {})
   }
 
   return { agent: telemetryAgent, message: reply }
