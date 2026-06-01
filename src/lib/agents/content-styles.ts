@@ -85,7 +85,7 @@ export const CONTENT_STYLES: ContentStyle[] = [
     energyLevel: 'high',
     bestFor: ['AI tools', 'future of work', 'tech careers', 'innovation topics'],
     textStyle: 'glitch text, neon outlines, terminal font',
-    exampleAngle: 'The future of hiring is already here. Most people don't know how to navigate it yet.',
+    exampleAngle: "The future of hiring is already here. Most people don't know how to navigate it yet.",
   },
   {
     id: 'vintage_infographic',
