@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
 import type { Message, AgentName } from '@/lib/types'
 
@@ -32,7 +32,7 @@ const QUICK_COMMANDS = [
 ]
 
 // ElevenLabs TTS — direct playback, no competing audio systems
-async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: number) => void): Promise<() => void> {
+async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: number) => void, speakingRef?: React.MutableRefObject<boolean>): Promise<() => void> {
   const res = await fetch('/api/speak', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -67,15 +67,24 @@ async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: nu
   }
 
   audio.onended = () => {
+    if (speakingRef) speakingRef.current = false
     cancelAnimationFrame(animFrame)
     onAmplitude?.(0)
     URL.revokeObjectURL(url)
     audioCtx?.close()
   }
 
-  audio.play().catch(() => {})
+  audio.onerror = () => {
+    if (speakingRef) speakingRef.current = false
+    cancelAnimationFrame(animFrame)
+    onAmplitude?.(0)
+  }
+
+  if (speakingRef) speakingRef.current = true
+  audio.play().catch(() => { if (speakingRef) speakingRef.current = false })
 
   return () => {
+    if (speakingRef) speakingRef.current = false
     audio.pause()
     audio.currentTime = 0
     cancelAnimationFrame(animFrame)
@@ -101,6 +110,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const recognitionRef = useRef<any>(null)
   const stopSpeakRef = useRef<(() => void) | null>(null)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const jarvisSpeakingRef = useRef(false) // true while ElevenLabs audio plays
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
@@ -149,7 +159,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       // Speak the response if voice is enabled
       if (voiceEnabled) {
         setSpeaking(true)
-        speakElevenLabs(reply, agent, onAmplitude).then(stopFn => {
+        speakElevenLabs(reply, agent, onAmplitude, jarvisSpeakingRef).then(stopFn => {
           stopSpeakRef.current = stopFn
           const wordCount = reply.split(' ').length
           const estimatedMs = (wordCount / 3) * 1000 + 1500
@@ -198,6 +208,9 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
+      // Ignore everything while Jarvis is speaking — prevents self-loop
+      if (jarvisSpeakingRef.current) return
+
       // Check all alternatives for wake word — helps with mishearing
       let transcript = ''
       for (let i = 0; i < event.results[0].length; i++) {
@@ -261,7 +274,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       onAgentChange('vault')
       if (voiceEnabled) {
         setSpeaking(true)
-        speakElevenLabs(reply, 'vault', onAmplitude).then(stop => {
+        speakElevenLabs(reply, 'vault', onAmplitude, jarvisSpeakingRef).then(stop => {
           stopSpeakRef.current = stop
           setTimeout(() => { setSpeaking(false); onAmplitude?.(0) }, (reply.split(' ').length / 3) * 1000 + 1500)
         })
