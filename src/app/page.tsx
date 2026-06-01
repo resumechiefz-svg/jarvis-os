@@ -9,11 +9,12 @@ import ForgeBuildMonitor from '@/components/hud/ForgeBuildMonitor'
 import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
 import GoalOne from '@/components/hud/GoalOne'
-import CommandInterface from '@/components/hud/CommandInterface'
 import PushToggle from '@/components/hud/PushToggle'
-import JarvisGreeting from '@/components/hud/JarvisGreeting'
 import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
-import ScreenAwareness from '@/components/hud/ScreenAwareness'
+
+const CommandInterface = dynamic(() => import('@/components/hud/CommandInterface'), { ssr: false })
+const JarvisGreeting = dynamic(() => import('@/components/hud/JarvisGreeting'), { ssr: false })
+const ScreenAwareness = dynamic(() => import('@/components/hud/ScreenAwareness'), { ssr: false })
 import type { Message, AgentName } from '@/lib/types'
 
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
