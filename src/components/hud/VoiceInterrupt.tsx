@@ -1,11 +1,11 @@
 'use client'
 /**
- * Voice Interrupt — Jarvis speaks proactively without being asked
- * Polls for urgent alerts and speaks them via ElevenLabs
- * Runs in background on both desktop and mobile
+ * VoiceInterrupt — NO autonomous audio. Ever.
+ * Agents only speak when called on or when Jarvis hands off to them.
+ * This component just silently polls and shows alerts as text in chat.
+ * ALL proactive audio is handled via Slack, not voice.
  */
 import { useEffect, useRef } from 'react'
-import { voiceState } from '@/lib/voice-state'
 
 interface Props {
   onMessage?: (text: string) => void
@@ -13,56 +13,25 @@ interface Props {
 
 export default function VoiceInterrupt({ onMessage }: Props) {
   const lastAlertRef = useRef<string>('')
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    const checkForAlerts = async () => {
+    const check = async () => {
       try {
-        // Check for any new high-priority proactive alerts
         const res = await fetch('/api/proactive', { method: 'POST' })
         const data = await res.json()
         const alerts: string[] = data.alerts ?? []
-
         for (const alert of alerts) {
-          // Don't repeat same alert
           if (alert === lastAlertRef.current) continue
           lastAlertRef.current = alert
-
-          // Show in chat
-          onMessage?.(alert)
-
-          // Speak it via ElevenLabs
-          const audioRes = await fetch('/api/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: alert.replace(/[*_~`]/g, ''), // strip markdown
-              agent: 'jarvis',
-            }),
-          })
-
-          if (audioRes.ok) {
-            const blob = await audioRes.blob()
-            const url = URL.createObjectURL(blob)
-            const audio = new Audio(url)
-            audio.onended = () => URL.revokeObjectURL(url)
-            // Respect AB — only interrupt if he's not speaking
-            await voiceState.playAudio(audio)
-          }
-
-          // Only speak one alert at a time
+          onMessage?.(alert) // text in chat only — zero audio
           break
         }
       } catch { /* silent */ }
     }
 
-    // Check every 15 minutes
-    intervalRef.current = setInterval(checkForAlerts, 15 * 60 * 1000)
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
+    const t = setInterval(check, 30 * 60 * 1000) // every 30 min, text only
+    return () => clearInterval(t)
   }, [onMessage])
 
-  return null // invisible background component
+  return null
 }

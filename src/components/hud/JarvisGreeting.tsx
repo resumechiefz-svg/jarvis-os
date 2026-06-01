@@ -58,21 +58,7 @@ export default function JarvisGreeting({ onSuggestionClick }: Props) {
         sessionStorage.setItem('jarvis_last_greeting', greetingText)
         sessionStorage.setItem('jarvis_last_greeting_time', Date.now().toString())
 
-        // 3. Speak it
-        const audioRes = await fetch('/api/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: greetingText, agent: 'jarvis' }),
-        })
-
-        if (audioRes.ok) {
-          const audioBlob = await audioRes.blob()
-          const audioUrl = URL.createObjectURL(audioBlob)
-          const audio = new Audio(audioUrl)
-          audio.onended = () => URL.revokeObjectURL(audioUrl)
-          await voiceState.playAudio(audio)
-        }
-
+        // Greeting shows as text only — Jarvis speaks when you talk to him, not on page load
         setGreeted(true)
       } catch { /* silent fail */ }
     }

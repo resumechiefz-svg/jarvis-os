@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
-import { Mic, MicOff, Volume2, VolumeX, Square, Camera, Radio } from 'lucide-react'
-const RealtimeVoice = lazy(() => import('@/components/mobile/RealtimeVoice'))
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Mic, MicOff, Volume2, VolumeX, Square, Camera } from 'lucide-react'
+import { voiceState } from '@/lib/voice-state'
 import type { Message, AgentName } from '@/lib/types'
 
 const AGENT_COLORS: Record<string, string> = {
@@ -32,7 +32,7 @@ const QUICK_COMMANDS = [
   { label: 'RC Acquisition', command: 'Atlas, how close is ResumeChiefz to being acquisition-ready?' },
 ]
 
-// ElevenLabs voice with real-time amplitude analysis
+// ElevenLabs — routes through voiceState so only ONE voice plays at a time
 async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: number) => void): Promise<() => void> {
   const res = await fetch('/api/speak', {
     method: 'POST',
@@ -47,24 +47,24 @@ async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: nu
 
   let animFrame = 0
   let audioCtx: AudioContext | null = null
-  let analyser: AnalyserNode | null = null
 
   if (onAmplitude) {
-    audioCtx = new AudioContext()
-    analyser = audioCtx.createAnalyser()
-    analyser.fftSize = 256
-    const source = audioCtx.createMediaElementSource(audio)
-    source.connect(analyser)
-    analyser.connect(audioCtx.destination)
-
-    const dataArray = new Uint8Array(analyser.frequencyBinCount)
-    const tick = () => {
-      analyser!.getByteFrequencyData(dataArray)
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
-      onAmplitude(Math.min(1, avg / 80))
-      animFrame = requestAnimationFrame(tick)
-    }
-    audio.onplay = () => tick()
+    try {
+      audioCtx = new AudioContext()
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      const source = audioCtx.createMediaElementSource(audio)
+      source.connect(analyser)
+      analyser.connect(audioCtx.destination)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        analyser.getByteFrequencyData(dataArray)
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
+        onAmplitude(Math.min(1, avg / 80))
+        animFrame = requestAnimationFrame(tick)
+      }
+      audio.onplay = () => tick()
+    } catch { /* skip amplitude if AudioContext fails */ }
   }
 
   audio.onended = () => {
@@ -74,11 +74,11 @@ async function speakElevenLabs(text: string, agent: string, onAmplitude?: (v: nu
     audioCtx?.close()
   }
 
-  audio.play()
+  // Play through global voice state — stops anything else playing first
+  await voiceState.playAudio(audio)
 
   return () => {
-    audio.pause()
-    audio.currentTime = 0
+    voiceState.stopAll()
     cancelAnimationFrame(animFrame)
     onAmplitude?.(0)
     URL.revokeObjectURL(url)
@@ -95,7 +95,6 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
-  const [realtimeOpen, setRealtimeOpen] = useState(true) // always-on by default
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -113,6 +112,10 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     if (!text.trim() || loading) return
     setInput('')
     setLoading(true)
+    // Signal activity so VoiceInterrupt won't interrupt for 3 minutes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(window as any).__jarvisUserActive?.()
+    voiceState.stopAll() // stop any playing audio when user sends a message
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -199,10 +202,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript.toLowerCase().trim()
 
+      // Ignore if Jarvis is currently speaking — avoid picking up his own voice
+      if (voiceState.isSpeaking()) return
+
       const wakeDetected = WAKE_WORDS.some(w => transcript.includes(w))
 
       if (wakeDetected) {
-        // Strip the wake word and send the rest as the command
+        // Stop any playing audio immediately when wake word detected
+        voiceState.stopAll()
+
         let command = transcript
         for (const w of WAKE_WORDS) {
           command = command.replace(w, '').trim()
@@ -212,12 +220,9 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         setTimeout(() => setTriggered(false), 2000)
 
         if (command.length > 1) {
-          // Full command in same utterance e.g. "Hey Jarvis morning brief"
           send(command)
         }
-        // If just wake word, do nothing — user will speak next
       } else if (transcript.length > 1) {
-        // Regular spoken command (mic was manually triggered)
         send(transcript)
       }
     }
@@ -425,18 +430,20 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
         </button>
 
-        {/* Realtime mic button — last in the row */}
-        <Suspense fallback={null}>
-          <RealtimeVoice
-            hidden={false}
-            inlineButton
-            onTranscript={(text, role, agent) => {
-              const msg = { id: Date.now().toString(), role, agent: (agent ?? 'jarvis') as import('@/lib/types').AgentName, content: text, timestamp: new Date() }
-              onMessage(msg)
-              if (agent) onAgentChange(agent as import('@/lib/types').AgentName)
-            }}
-          />
-        </Suspense>
+        {/* Mic toggle — controls wake word listener */}
+        <button
+          onClick={toggleMic}
+          className={`px-3 border transition-colors ${
+            triggered
+              ? 'border-cyan-300 text-cyan-200 bg-cyan-900/50 animate-pulse'
+              : listening
+              ? 'border-green-500 text-green-400 bg-green-900/20'
+              : 'border-cyan-700/50 text-cyan-500 hover:border-cyan-500 hover:text-cyan-300 bg-black/40'
+          }`}
+          title={listening ? 'Listening for "Hey Jarvis" — click to pause' : 'Click to enable voice'}
+        >
+          {listening ? <Mic size={14} /> : <MicOff size={14} />}
+        </button>
 
         <button
           onClick={() => send(input)}
