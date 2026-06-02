@@ -72,7 +72,6 @@ export default function HUD() {
             messages={messages}
             activeAgent={activeAgent}
             amplitude={orbAmplitude}
-            onAgentChange={handleAgentChange}
           />
         </div>
 
