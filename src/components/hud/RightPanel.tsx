@@ -105,16 +105,36 @@ export default function RightPanel({ activeAgent, mrr = 0 }: Props) {
           <><Cell label="P&L" value="—" /><Cell label="Win Rate" value="—" /></>
         )}
 
-        {/* RC Revenue quick */}
+        {/* RC Revenue + progress bars */}
         <SectionHead title="RC Revenue" badge="STRIPE" />
         <Cell label="MRR" value={`$${mrr.toFixed(0)}`} color={mrr > 0 ? up : nu} />
         <Cell label="ARR" value={`$${(mrr * 12).toFixed(0)}`} />
-        <div className="col-span-2 mt-0.5 mb-1">
-          <div className="flex justify-between text-[10px] text-white/20 mb-0.5 overflow-hidden"><span className="truncate">MRR Goal</span><span className="shrink-0 ml-1">${mrr.toFixed(0)} / $10k</span></div>
-          <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (mrr / 10000) * 100)}%`, background: 'linear-gradient(90deg, #a855f7, #00d4ff)' }} />
+
+        {/* Progress bars */}
+        {[
+          { label: 'MRR Goal', current: mrr, target: 10000, color: '#a855f7', format: (v: number) => `$${v.toFixed(0)}` },
+          { label: 'ARR Goal', current: mrr * 12, target: 120000, color: '#00d4ff', format: (v: number) => `$${(v/1000).toFixed(0)}k` },
+          { label: 'CC Sales', current: vault?.totalSales ?? 0, target: 2000, color: '#c9a84c', format: (v: number) => `${v}` },
+          { label: 'Wkly Rev', current: vault?.weeklyRevenue ?? 0, target: 100, color: '#00ff88', format: (v: number) => `$${v.toFixed(0)}` },
+        ].map(bar => (
+          <div key={bar.label} className="col-span-2 mb-1">
+            <div className="flex justify-between mb-0.5 overflow-hidden">
+              <span className="text-[10px] text-white/30 tracking-wider truncate">{bar.label}</span>
+              <span className="text-[10px] shrink-0 ml-1 font-mono" style={{ color: bar.color }}>
+                {bar.format(bar.current)} <span className="text-white/20">/ {bar.format(bar.target)}</span>
+              </span>
+            </div>
+            <div style={{ height: 3, background: 'rgba(255,255,255,0.04)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 2,
+                width: `${Math.min(100, (bar.current / bar.target) * 100)}%`,
+                background: `linear-gradient(90deg, ${bar.color}80, ${bar.color})`,
+                transition: 'width 0.8s ease',
+                boxShadow: `0 0 6px ${bar.color}60`,
+              }} />
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* Beckett */}
         <SectionHead title="Beckett" />
