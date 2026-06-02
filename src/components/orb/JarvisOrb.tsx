@@ -1,10 +1,10 @@
 'use client'
-
 /**
- * JarvisOrb — always-alive triangle with rotating tick ring and internal particles
- * Inspired by Iron Man HUD — never static, constantly breathing and moving
+ * JarvisOrb v4 — Full power
+ * Massive triangle with electric arcs, glowing core, particle storm
+ * Pulses with speech amplitude in real time
+ * Always alive — never static
  */
-
 import { useEffect, useRef } from 'react'
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
   size?: number
 }
 
-export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 0, size = 300 }: Props) {
+export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 0, size = 420 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const frameRef = useRef<number>(0)
   const timeRef = useRef(0)
@@ -37,242 +37,201 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
     const b = parseInt(hex.slice(4, 6), 16)
     const rgb = `${r},${g},${b}`
 
-    const outerRingR = W * 0.44
-    const innerRingR = W * 0.38
-    const triR = W * 0.26  // triangle inscribed radius
+    const outerR = W * 0.43
+    const triR = W * 0.27
 
-    // Triangle points — equilateral, tip pointing DOWN
-    function triPts(scale = 1) {
+    // Triangle vertices — tip down (inverted)
+    function verts(scale = 1) {
       return [
-        { x: cx,                                            y: cy + triR * scale },       // bottom
-        { x: cx - triR * scale * Math.sin(Math.PI / 3) * 1.15, y: cy - triR * scale * 0.5 }, // top-left
-        { x: cx + triR * scale * Math.sin(Math.PI / 3) * 1.15, y: cy - triR * scale * 0.5 }, // top-right
+        { x: cx, y: cy + triR * scale },
+        { x: cx - triR * scale * Math.sin(Math.PI / 3) * 1.18, y: cy - triR * scale * 0.52 },
+        { x: cx + triR * scale * Math.sin(Math.PI / 3) * 1.18, y: cy - triR * scale * 0.52 },
       ]
     }
 
-    // Internal particles — always swirling inside the triangle
-    type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; speed: number }
-    const particles: Particle[] = []
+    // Particles inside triangle
+    type P = { x: number; y: number; vx: number; vy: number; life: number; max: number; sz: number }
+    const particles: P[] = []
 
-    function isInsideTriangle(px: number, py: number, pts: ReturnType<typeof triPts>): boolean {
+    function isInTri(px: number, py: number, pts: ReturnType<typeof verts>) {
       const [A, B, C] = pts
       const d1 = (px - B.x) * (A.y - B.y) - (A.x - B.x) * (py - B.y)
       const d2 = (px - C.x) * (B.y - C.y) - (B.x - C.x) * (py - C.y)
       const d3 = (px - A.x) * (C.y - A.y) - (C.x - A.x) * (py - A.y)
-      const hasNeg = d1 < 0 || d2 < 0 || d3 < 0
-      const hasPos = d1 > 0 || d2 > 0 || d3 > 0
-      return !(hasNeg && hasPos)
+      return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))
     }
 
-    function spawnParticle() {
-      // Random point inside triangle bounding box, keep if inside
-      const pts = triPts(0.85)
-      const minX = Math.min(...pts.map(p => p.x))
-      const maxX = Math.max(...pts.map(p => p.x))
-      const minY = Math.min(...pts.map(p => p.y))
-      const maxY = Math.max(...pts.map(p => p.y))
+    function spawnP() {
+      const pts = verts(0.82)
+      const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+      const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
       let px = minX + Math.random() * (maxX - minX)
       let py = minY + Math.random() * (maxY - minY)
-      if (!isInsideTriangle(px, py, pts)) { px = cx; py = cy }
-
-      const speed = 0.2 + Math.random() * 0.8 + ampRef.current * 1.5
+      if (!isInTri(px, py, pts)) { px = cx; py = cy }
+      const spd = (0.3 + Math.random() * 1.2) * (1 + ampRef.current * 2)
       const angle = Math.random() * Math.PI * 2
-      particles.push({
-        x: px, y: py,
-        vx: Math.cos(angle) * speed * 0.3,
-        vy: Math.sin(angle) * speed * 0.3 - speed * 0.2, // slight upward drift
-        life: 0,
-        maxLife: 60 + Math.random() * 80,
-        size: 0.6 + Math.random() * 1.4,
-        speed,
-      })
+      particles.push({ x: px, y: py, vx: Math.cos(angle) * spd * 0.25, vy: Math.sin(angle) * spd * 0.25 - spd * 0.15, life: 0, max: 50 + Math.random() * 70, sz: 0.5 + Math.random() * 1.8 })
     }
 
-    // Tick marks config for outer ring
-    const TICK_COUNT = 48
-    const MAJOR_EVERY = 8
+    // Lightning bolt between two points
+    function lightning(x1: number, y1: number, x2: number, y2: number, chaos: number, depth: number) {
+      if (depth <= 0) {
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y2)
+        return
+      }
+      const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * chaos
+      const my = (y1 + y2) / 2 + (Math.random() - 0.5) * chaos
+      lightning(x1, y1, mx, my, chaos / 2, depth - 1)
+      lightning(mx, my, x2, y2, chaos / 2, depth - 1)
+    }
 
-    // Rotating scanner line angle
-    let scanAngle = 0
-    let innerScanAngle = Math.PI
+    const TICK_COUNT = 60
+    const MAJOR = 8
+    let scanAngle = -Math.PI / 2
+    let innerScan = Math.PI / 2
 
     function draw() {
       timeRef.current += 0.016
       const t = timeRef.current
       const amp = ampRef.current
 
-      scanAngle += (active ? 0.025 + amp * 0.05 : 0.012)
-      innerScanAngle -= (active ? 0.018 : 0.008)
+      scanAngle += active ? 0.022 + amp * 0.06 : 0.010
+      innerScan -= active ? 0.015 : 0.007
 
       const breathe = active
-        ? 0.6 + 0.4 * Math.sin(t * 4) + amp * 0.6
-        : 0.25 + 0.15 * Math.sin(t * 1.2)
-      const glowSize = active ? 35 + amp * 55 : 12
+        ? 0.65 + 0.35 * Math.sin(t * 5) + amp * 0.7
+        : 0.22 + 0.18 * Math.sin(t * 1.1)
+      const glow = active ? 50 + amp * 100 : 14
 
       ctx.clearRect(0, 0, W, H)
 
-      // ── Outer ambient glow ──
-      const amb = ctx.createRadialGradient(cx, cy, outerRingR * 0.2, cx, cy, outerRingR * 1.7)
-      amb.addColorStop(0, `rgba(${rgb},${breathe * 0.07})`)
-      amb.addColorStop(1, `rgba(${rgb},0)`)
-      ctx.fillStyle = amb
-      ctx.fillRect(0, 0, W, H)
+      // ── Deep ambient glow ──
+      const amb = ctx.createRadialGradient(cx, cy, outerR * 0.1, cx, cy, outerR * 2)
+      amb.addColorStop(0, `rgba(${rgb},${breathe * 0.12})`)
+      amb.addColorStop(0.5, `rgba(${rgb},${breathe * 0.04})`)
+      amb.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = amb; ctx.fillRect(0, 0, W, H)
 
       // ── Outer ring ──
-      ctx.beginPath()
-      ctx.arc(cx, cy, outerRingR, 0, Math.PI * 2)
-      ctx.strokeStyle = `rgba(${rgb},${0.12 + breathe * 0.18})`
-      ctx.lineWidth = 1
-      ctx.shadowColor = agentColor
-      ctx.shadowBlur = glowSize * 0.35
-      ctx.stroke()
-      ctx.shadowBlur = 0
+      ctx.beginPath(); ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(${rgb},${0.1 + breathe * 0.2})`
+      ctx.lineWidth = 1.2; ctx.shadowColor = agentColor; ctx.shadowBlur = glow * 0.5
+      ctx.stroke(); ctx.shadowBlur = 0
 
-      // ── Tick marks on outer ring ──
+      // ── Tick marks ──
       for (let i = 0; i < TICK_COUNT; i++) {
-        const angle = (i / TICK_COUNT) * Math.PI * 2
-        const isMajor = i % MAJOR_EVERY === 0
-        const tickLen = isMajor ? 10 : 5
-        const tickAlpha = isMajor ? 0.5 : 0.2
-
-        const cos = Math.cos(angle)
-        const sin = Math.sin(angle)
-        const x1 = cx + cos * outerRingR
-        const y1 = cy + sin * outerRingR
-        const x2 = cx + cos * (outerRingR - tickLen)
-        const y2 = cy + sin * (outerRingR - tickLen)
-
+        const a = (i / TICK_COUNT) * Math.PI * 2
+        const major = i % MAJOR === 0
+        const len = major ? 12 : 5
+        const alpha = major ? 0.45 : 0.15
+        const cos = Math.cos(a), sin = Math.sin(a)
         ctx.beginPath()
-        ctx.moveTo(x1, y1)
-        ctx.lineTo(x2, y2)
-        ctx.strokeStyle = `rgba(${rgb},${tickAlpha})`
-        ctx.lineWidth = isMajor ? 1.5 : 0.8
-        ctx.stroke()
+        ctx.moveTo(cx + cos * outerR, cy + sin * outerR)
+        ctx.lineTo(cx + cos * (outerR - len), cy + sin * (outerR - len))
+        ctx.strokeStyle = `rgba(${rgb},${alpha})`
+        ctx.lineWidth = major ? 1.5 : 0.8; ctx.stroke()
       }
 
-      // ── Rotating scanner sweep on outer ring ──
-      const sweepLen = Math.PI * 0.4
-      // Draw arc highlight on outer ring for scanner
-      ctx.beginPath()
-      ctx.arc(cx, cy, outerRingR, scanAngle - sweepLen, scanAngle)
-      ctx.strokeStyle = `rgba(${rgb},${0.6 + breathe * 0.4})`
-      ctx.lineWidth = 2
-      ctx.shadowColor = agentColor
-      ctx.shadowBlur = 8
-      ctx.stroke()
-      ctx.shadowBlur = 0
+      // ── Scanner arc ──
+      const sweepLen = active ? Math.PI * 0.55 : Math.PI * 0.3
+      ctx.beginPath(); ctx.arc(cx, cy, outerR, scanAngle - sweepLen, scanAngle)
+      ctx.strokeStyle = `rgba(${rgb},${0.55 + breathe * 0.45})`
+      ctx.lineWidth = active ? 3 : 1.8; ctx.shadowColor = agentColor; ctx.shadowBlur = active ? 16 : 6; ctx.stroke(); ctx.shadowBlur = 0
+      const sdx = cx + Math.cos(scanAngle) * outerR, sdy = cy + Math.sin(scanAngle) * outerR
+      ctx.beginPath(); ctx.arc(sdx, sdy, active ? 5 : 3, 0, Math.PI * 2)
+      ctx.fillStyle = agentColor; ctx.shadowColor = agentColor; ctx.shadowBlur = 20; ctx.fill(); ctx.shadowBlur = 0
 
-      // Scanner dot at head
-      const sdx = cx + Math.cos(scanAngle) * outerRingR
-      const sdy = cy + Math.sin(scanAngle) * outerRingR
-      ctx.beginPath()
-      ctx.arc(sdx, sdy, 3, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(${rgb},1)`
-      ctx.shadowColor = agentColor
-      ctx.shadowBlur = 12
-      ctx.fill()
-      ctx.shadowBlur = 0
-
-      // ── Inner dashed ring ──
-      ctx.setLineDash([4, 6])
-      ctx.beginPath()
-      ctx.arc(cx, cy, innerRingR, 0, Math.PI * 2)
-      ctx.strokeStyle = `rgba(${rgb},${0.08 + breathe * 0.1})`
-      ctx.lineWidth = 0.8
-      ctx.stroke()
+      // ── Inner rotating segment ──
+      ctx.setLineDash([5, 8])
+      ctx.beginPath(); ctx.arc(cx, cy, outerR * 0.85, innerScan, innerScan + Math.PI * 0.3)
+      ctx.strokeStyle = `rgba(${rgb},${0.2 + breathe * 0.2})`; ctx.lineWidth = 1; ctx.stroke()
       ctx.setLineDash([])
 
-      // Inner ring rotating segment
-      ctx.beginPath()
-      ctx.arc(cx, cy, innerRingR, innerScanAngle, innerScanAngle + Math.PI * 0.25)
-      ctx.strokeStyle = `rgba(${rgb},${0.3 + breathe * 0.3})`
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-
-      // ── Triangle — solid fill with internal glow ──
-      const pts = triPts()
-      ctx.beginPath()
-      ctx.moveTo(pts[0].x, pts[0].y)
-      ctx.lineTo(pts[1].x, pts[1].y)
-      ctx.lineTo(pts[2].x, pts[2].y)
-      ctx.closePath()
-
+      // ── Triangle fill ──
+      const pts = verts()
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.closePath()
       const fillGrad = ctx.createLinearGradient(cx, pts[1].y, cx, pts[0].y)
-      fillGrad.addColorStop(0, `rgba(${rgb},${0.72 + breathe * 0.22})`)
-      fillGrad.addColorStop(0.5, `rgba(${rgb},${0.45 + breathe * 0.15})`)
-      fillGrad.addColorStop(1, `rgba(${rgb},${0.25 + breathe * 0.1})`)
-      ctx.fillStyle = fillGrad
-      ctx.shadowColor = agentColor
-      ctx.shadowBlur = active ? glowSize : glowSize * 0.6
-      ctx.fill()
+      fillGrad.addColorStop(0, `rgba(${rgb},${0.78 + breathe * 0.2})`)
+      fillGrad.addColorStop(0.6, `rgba(${rgb},${0.45 + breathe * 0.15})`)
+      fillGrad.addColorStop(1, `rgba(${rgb},${0.2 + breathe * 0.08})`)
+      ctx.fillStyle = fillGrad; ctx.shadowColor = agentColor; ctx.shadowBlur = glow; ctx.fill()
+      ctx.strokeStyle = `rgba(${rgb},${0.75 + breathe * 0.25})`
+      ctx.lineWidth = active ? 2.8 : 2; ctx.shadowBlur = glow * 1.4; ctx.stroke(); ctx.shadowBlur = 0
 
-      ctx.strokeStyle = `rgba(${rgb},${0.7 + breathe * 0.3})`
-      ctx.lineWidth = active ? 2.5 : 1.8
-      ctx.shadowBlur = active ? glowSize * 1.2 : glowSize * 0.4
-      ctx.stroke()
-      ctx.shadowBlur = 0
+      // ── Inner core glow ──
+      const coreSize = (triR * 0.12) * (1 + breathe * 0.4 + amp * 0.6)
+      const coreGrad = ctx.createRadialGradient(cx, cy - triR * 0.08, 0, cx, cy - triR * 0.08, coreSize * 3)
+      coreGrad.addColorStop(0, `rgba(255,255,255,${0.7 + amp * 0.3})`)
+      coreGrad.addColorStop(0.3, `rgba(${rgb},${0.9 + amp * 0.1})`)
+      coreGrad.addColorStop(1, `rgba(${rgb},0)`)
+      ctx.fillStyle = coreGrad; ctx.shadowColor = 'white'; ctx.shadowBlur = 30 + amp * 40
+      ctx.beginPath(); ctx.arc(cx, cy - triR * 0.08, coreSize * 3, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0
 
-      // ── Internal particles (always spawning) ──
-      const spawnRate = active ? 3 + Math.floor(amp * 6) : 2
-      for (let i = 0; i < spawnRate; i++) {
-        if (Math.random() < 0.6) spawnParticle()
+      // ── Electric arcs when speaking ──
+      if (amp > 0.15 || active) {
+        const arcAlpha = Math.min(0.8, 0.2 + amp * 0.8)
+        const arcPts = verts(0.95)
+        for (let pair = 0; pair < 3; pair++) {
+          if (Math.random() < 0.4 + amp * 0.5) {
+            const p1 = arcPts[pair], p2 = arcPts[(pair + 1) % 3]
+            ctx.beginPath(); ctx.strokeStyle = `rgba(${rgb},${arcAlpha})`; ctx.lineWidth = 0.8
+            ctx.shadowColor = agentColor; ctx.shadowBlur = 12
+            lightning(p1.x, p1.y, p2.x, p2.y, triR * (0.06 + amp * 0.12), 3)
+            ctx.stroke(); ctx.shadowBlur = 0
+          }
+          // Arcs to core
+          if (amp > 0.3 && Math.random() < amp * 0.4) {
+            const p = arcPts[pair]
+            ctx.beginPath(); ctx.strokeStyle = `rgba(255,255,255,${amp * 0.4})`; ctx.lineWidth = 0.5
+            ctx.shadowBlur = 8; ctx.shadowColor = 'white'
+            lightning(p.x, p.y, cx, cy - triR * 0.08, triR * 0.04, 2)
+            ctx.stroke(); ctx.shadowBlur = 0
+          }
+        }
       }
 
+      // ── Particles ──
+      const rate = active ? 3 + Math.floor(amp * 8) : 2
+      for (let i = 0; i < rate; i++) if (Math.random() < 0.7) spawnP()
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]
-        p.x += p.vx
-        p.y += p.vy
-        p.vy -= 0.005 // subtle upward drift
-        p.life++
-        if (p.life >= p.maxLife) { particles.splice(i, 1); continue }
-
-        // Bounce off triangle edges (simplified — just fade near edges)
-        if (!isInsideTriangle(p.x, p.y, triPts(0.9))) {
-          particles.splice(i, 1)
-          continue
-        }
-
-        const alpha = (1 - p.life / p.maxLife) * (active ? 0.9 : 0.5)
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(${rgb},${alpha})`
-        ctx.shadowColor = agentColor
-        ctx.shadowBlur = 3
-        ctx.fill()
-        ctx.shadowBlur = 0
+        p.x += p.vx; p.y += p.vy; p.vy -= 0.006; p.life++
+        if (p.life >= p.max || !isInTri(p.x, p.y, verts(0.88))) { particles.splice(i, 1); continue }
+        const a = (1 - p.life / p.max) * (active ? 0.9 : 0.55)
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.sz, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${rgb},${a})`; ctx.shadowColor = agentColor; ctx.shadowBlur = 4; ctx.fill(); ctx.shadowBlur = 0
       }
 
-      // ── Speaking pulse rings ──
-      if (amp > 0.08) {
-        for (let ring = 0; ring < 3; ring++) {
-          const progress = ((t * 1.5 + ring * 0.33) % 1)
-          const rSize = outerRingR * 0.5 + progress * outerRingR * 0.8
-          const alpha = (1 - progress) * amp * 0.5
-          ctx.beginPath()
-          ctx.arc(cx, cy, rSize, 0, Math.PI * 2)
-          ctx.strokeStyle = `rgba(${rgb},${alpha})`
-          ctx.lineWidth = 1.5
-          ctx.stroke()
+      // ── Pulse rings when speaking ──
+      if (amp > 0.08 || active) {
+        for (let ring = 0; ring < 4; ring++) {
+          const phase = ((t * (active ? 1.8 : 0.8) + ring * 0.25) % 1)
+          const rSize = outerR * 0.45 + phase * outerR * 1.1
+          const alpha = (1 - phase) * (amp > 0.08 ? amp * 0.7 : 0.12)
+          if (alpha > 0.01) {
+            ctx.beginPath(); ctx.arc(cx, cy, rSize, 0, Math.PI * 2)
+            ctx.strokeStyle = `rgba(${rgb},${alpha})`; ctx.lineWidth = 1.5; ctx.stroke()
+          }
         }
       }
 
-      // ── Corner bracket accents (Iron Man HUD style) ──
-      const bracketSize = outerRingR * 0.28
-      const bracketDist = outerRingR * 1.08
-      const bracketAlpha = 0.15 + breathe * 0.12
-      ;[
-        [-1, -1], [1, -1], [1, 1], [-1, 1]
-      ].forEach(([sx, sy]) => {
-        const bx = cx + sx * bracketDist * 0.7
-        const by = cy + sy * bracketDist * 0.7
-        ctx.strokeStyle = `rgba(${rgb},${bracketAlpha})`
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.moveTo(bx, by)
-        ctx.lineTo(bx + sx * bracketSize * -1, by)
-        ctx.moveTo(bx, by)
-        ctx.lineTo(bx, by + sy * bracketSize * -1)
-        ctx.stroke()
+      // ── HUD corner brackets ──
+      const bracketD = outerR * 1.12, bracketL = outerR * 0.22
+      const ba = 0.12 + breathe * 0.1
+      ;[[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy]) => {
+        const bx = cx + sx * bracketD * 0.72, by = cy + sy * bracketD * 0.72
+        ctx.strokeStyle = `rgba(${rgb},${ba})`; ctx.lineWidth = 1.2
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - sx * bracketL, by)
+        ctx.moveTo(bx, by); ctx.lineTo(bx, by - sy * bracketL); ctx.stroke()
+      })
+
+      // ── Outer data arc labels (just decorative ticks at cardinal points) ──
+      ;[0, 90, 180, 270].forEach(deg => {
+        const a = (deg * Math.PI) / 180
+        const dx = cx + Math.cos(a) * (outerR + 8), dy = cy + Math.sin(a) * (outerR + 8)
+        ctx.beginPath(); ctx.arc(dx, dy, 2, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${rgb},${0.3 + breathe * 0.2})`; ctx.fill()
       })
 
       frameRef.current = requestAnimationFrame(draw)
@@ -283,11 +242,7 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
   }, [active, agentColor])
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      style={{ width: size, height: size, display: 'block' }}
-    />
+    <canvas ref={canvasRef} width={size} height={size}
+      style={{ width: size, height: size, display: 'block', filter: `drop-shadow(0 0 ${amplitude > 0.1 ? 40 : 20}px ${agentColor}40)` }} />
   )
 }
