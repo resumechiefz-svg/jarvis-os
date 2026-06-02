@@ -39,6 +39,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -129,14 +130,26 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
     recognition.onerror = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       recognitionRef.current = null
-      if (e.error !== 'no-speech' && e.error !== 'aborted') setListening(false)
-      if (!micMutedRef.current) {
-        restartTimerRef.current = setTimeout(startRecognition, 1000)
+      setListening(false)
+      if (e.error === 'not-allowed' || e.error === 'permission-denied') {
+        setMicError('Mic blocked — click the 🔒 in Chrome address bar → allow mic')
+      } else if (e.error === 'no-speech') {
+        // Normal — just restart
+        if (!micMutedRef.current) restartTimerRef.current = setTimeout(startRecognition, 300)
+      } else if (e.error !== 'aborted') {
+        setMicError(`Mic error: ${e.error}`)
+        if (!micMutedRef.current) restartTimerRef.current = setTimeout(startRecognition, 1000)
       }
     }
 
     recognitionRef.current = recognition
-    try { recognition.start() } catch { recognitionRef.current = null }
+    try {
+      recognition.start()
+      setMicError(null)
+    } catch (err) {
+      recognitionRef.current = null
+      setMicError(`Can't start mic: ${err}`)
+    }
   }, []) // stable — reads state via refs
 
   // Auto-start on mount + unlock AudioContext on first gesture
@@ -361,12 +374,20 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
   }, [analyzingImage, input, onMessage, onAgentChange, speak])
 
-  const toggleMic = useCallback(() => {
+  const toggleMic = useCallback(async () => {
     if (listening) {
       stopRecognition()
-      micMutedRef.current = true // manual off
+      micMutedRef.current = true
     } else {
       micMutedRef.current = false
+      setMicError(null)
+      // Explicitly request mic permission first — this makes Chrome prompt the user
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch (err) {
+        setMicError('Mic denied — click 🔒 in address bar and allow microphone')
+        return
+      }
       startRecognition()
     }
   }, [listening, startRecognition, stopRecognition])
@@ -375,6 +396,15 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+
+      {/* Mic error banner */}
+      {micError && (
+        <div style={{ padding: '4px 16px', background: 'rgba(255,68,85,0.12)', borderBottom: '1px solid rgba(255,68,85,0.3)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, color: '#ff4455' }}>⚠</span>
+          <span style={{ fontSize: 10, color: 'rgba(255,68,85,0.8)', flex: 1 }}>{micError}</span>
+          <button onClick={() => setMicError(null)} style={{ fontSize: 11, color: 'rgba(255,68,85,0.5)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+        </div>
+      )}
 
       {/* Last response toast — shows most recent agent reply */}
       {messages.length > 0 && (
