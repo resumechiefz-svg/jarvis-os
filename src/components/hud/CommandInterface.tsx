@@ -46,10 +46,11 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bargeInRef = useRef<any>(null)     // separate barge-in listener while Jarvis speaks
+  const bargeInRef = useRef<any>(null)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bargeInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)  // shared, resumed on gesture
   const micMutedRef = useRef(false)
   const voiceEnabledRef = useRef(true)
   const onAmplitudeRef = useRef(onAmplitude)
@@ -138,12 +139,28 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     try { recognition.start() } catch { recognitionRef.current = null }
   }, []) // stable — reads state via refs
 
-  // Auto-start on mount
+  // Auto-start on mount + unlock AudioContext on first gesture
   useEffect(() => {
     startRecognition()
+
+    // Chrome requires a user gesture before AudioContext works
+    // Prime it on the first click or keypress so speak() works immediately
+    const unlock = () => {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext()
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume()
+      }
+    }
+    window.addEventListener('click', unlock, { once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+
     return () => {
       stopRecognition()
       micMutedRef.current = false
+      window.removeEventListener('click', unlock)
+      window.removeEventListener('keydown', unlock)
     }
   }, [startRecognition, stopRecognition])
 
@@ -177,10 +194,12 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       const audio = new Audio(url)
       currentAudioRef.current = audio
 
-      // Amplitude analysis for orb animation
+      // Amplitude analysis — reuse shared AudioContext to avoid Chrome autoplay block
       let animFrame = 0
       try {
-        const ctx = new AudioContext()
+        if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+        const ctx = audioCtxRef.current
+        if (ctx.state === 'suspended') await ctx.resume()
         const analyser = ctx.createAnalyser()
         analyser.fftSize = 256
         const source = ctx.createMediaElementSource(audio)
@@ -195,8 +214,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
           }
           tick()
         }
-        audio.onended = () => { cancelAnimationFrame(animFrame); ctx.close() }
-      } catch { /* no amplitude on this browser */ }
+      } catch { /* no amplitude */ }
 
       const stopBargeIn = () => {
         if (bargeInTimerRef.current) { clearTimeout(bargeInTimerRef.current); bargeInTimerRef.current = null }
