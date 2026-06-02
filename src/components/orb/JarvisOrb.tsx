@@ -73,19 +73,6 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
       particles.push({ x: px, y: py, vx: Math.cos(angle) * spd * 0.25, vy: Math.sin(angle) * spd * 0.25 - spd * 0.15, life: 0, max: 50 + Math.random() * 70, sz: 0.5 + Math.random() * 1.8 })
     }
 
-    // Lightning bolt between two points
-    function lightning(x1: number, y1: number, x2: number, y2: number, chaos: number, depth: number) {
-      if (depth <= 0) {
-        ctx.moveTo(x1, y1)
-        ctx.lineTo(x2, y2)
-        return
-      }
-      const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * chaos
-      const my = (y1 + y2) / 2 + (Math.random() - 0.5) * chaos
-      lightning(x1, y1, mx, my, chaos / 2, depth - 1)
-      lightning(mx, my, x2, y2, chaos / 2, depth - 1)
-    }
-
     const TICK_COUNT = 60
     const MAJOR = 8
     let scanAngle = -Math.PI / 2
@@ -168,27 +155,12 @@ export default function JarvisOrb({ active, agentColor = '#00d4ff', amplitude = 
       ctx.fillStyle = coreGrad; ctx.shadowColor = 'white'; ctx.shadowBlur = 30 + amp * 40
       ctx.beginPath(); ctx.arc(cx, cy - triR * 0.08, coreSize * 3, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0
 
-      // ── Electric arcs when speaking ──
-      if (amp > 0.15 || active) {
-        const arcAlpha = Math.min(0.8, 0.2 + amp * 0.8)
-        const arcPts = verts(0.95)
-        for (let pair = 0; pair < 3; pair++) {
-          if (Math.random() < 0.4 + amp * 0.5) {
-            const p1 = arcPts[pair], p2 = arcPts[(pair + 1) % 3]
-            ctx.beginPath(); ctx.strokeStyle = `rgba(${rgb},${arcAlpha})`; ctx.lineWidth = 0.8
-            ctx.shadowColor = agentColor; ctx.shadowBlur = 12
-            lightning(p1.x, p1.y, p2.x, p2.y, triR * (0.06 + amp * 0.12), 3)
-            ctx.stroke(); ctx.shadowBlur = 0
-          }
-          // Arcs to core
-          if (amp > 0.3 && Math.random() < amp * 0.4) {
-            const p = arcPts[pair]
-            ctx.beginPath(); ctx.strokeStyle = `rgba(255,255,255,${amp * 0.4})`; ctx.lineWidth = 0.5
-            ctx.shadowBlur = 8; ctx.shadowColor = 'white'
-            lightning(p.x, p.y, cx, cy - triR * 0.08, triR * 0.04, 2)
-            ctx.stroke(); ctx.shadowBlur = 0
-          }
-        }
+      // ── Edge glow when speaking (subtle, not fake lightning) ──
+      if (active && amp > 0.05) {
+        const arcPts = verts(1.0)
+        ctx.beginPath(); ctx.moveTo(arcPts[0].x, arcPts[0].y); ctx.lineTo(arcPts[1].x, arcPts[1].y); ctx.lineTo(arcPts[2].x, arcPts[2].y); ctx.closePath()
+        ctx.strokeStyle = `rgba(255,255,255,${amp * 0.35})`
+        ctx.lineWidth = 1; ctx.shadowColor = 'white'; ctx.shadowBlur = amp * 30; ctx.stroke(); ctx.shadowBlur = 0
       }
 
       // ── Particles ──

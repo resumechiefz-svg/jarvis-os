@@ -15,6 +15,8 @@ const MOBILE_ROUTES = ['/api/mobile']
 const PUBLIC_ROUTES = [
   '/api/push',
   '/api/auth',
+  '/api/speak',   // TTS — called from authenticated browser session
+  '/api/jarvis',  // chat — called from authenticated browser session
   '/api/news',
   '/api/stocks',
   '/api/google/auth',

@@ -49,6 +49,7 @@ export default function HUD() {
   const [amplitude, setAmplitude] = useState(0)
   const [leftOpen, setLeftOpen] = useState(false)
   const [rightOpen, setRightOpen] = useState(false)
+  const [feedOpen, setFeedOpen] = useState(false)
   const [mrr, setMrr] = useState(0)
   const [orbSize, setOrbSize] = useState(380)
   const [ticker, setTicker] = useState(['JARVIS OS ● ONLINE', 'TRADEPILOT ● ACTIVE', 'CARD CHIEFZ ● LIVE', 'RESUMECHIEFZ ● MONITORING'])
@@ -313,13 +314,18 @@ export default function HUD() {
               </div>
             </div>
 
-            {/* ── Live feed strip ── */}
-            <div style={{ flexShrink: 0, maxHeight: '22%', borderTop: '1px solid rgba(0,212,255,0.06)', background: 'rgba(0,0,0,0.7)', overflowY: 'auto', zIndex: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', borderBottom: '1px solid rgba(0,212,255,0.04)', position: 'sticky', top: 0, background: 'rgba(0,0,0,0.9)' }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00ff88', boxShadow: '0 0 5px #00ff88', animation: 'voice-dot-pulse 2s infinite' }} />
+            {/* ── Live feed strip — collapsible ── */}
+            <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.06)', background: 'rgba(0,0,0,0.7)', zIndex: 2, transition: 'max-height 0.3s ease', maxHeight: feedOpen ? '28%' : '28px', overflow: 'hidden' }}>
+              <div
+                onClick={() => setFeedOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', cursor: 'pointer', userSelect: 'none' }}
+              >
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00ff88', boxShadow: '0 0 5px #00ff88', animation: 'voice-dot-pulse 2s infinite', flexShrink: 0 }} />
                 <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.25em', color: 'rgba(0,212,255,0.4)' }}>LIVE INTELLIGENCE</span>
                 <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(0,212,255,0.08), transparent)' }} />
+                <span style={{ fontSize: 9, color: 'rgba(0,212,255,0.25)', transition: 'transform 0.3s', transform: feedOpen ? 'rotate(180deg)' : 'none' }}>▼</span>
               </div>
+              <div style={{ overflowY: 'auto', maxHeight: 'calc(28vh - 28px)' }}>
               {feed.length === 0 ? (
                 <div style={{ padding: 16, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.08)', letterSpacing: '0.15em' }}>AWAITING INTELLIGENCE FEED...</div>
               ) : feed.map(item => {
@@ -340,6 +346,7 @@ export default function HUD() {
                   </div>
                 )
               })}
+              </div>
             </div>
           </div>
 
