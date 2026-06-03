@@ -93,12 +93,13 @@ export async function POST(req: NextRequest) {
           send({ type: 'status', message: `Turn ${turns}/${MAX_TURNS} — thinking...` })
 
           // Call Claude with computer_use tool
-          const response = await anthropic.beta.messages.create({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const response = await (anthropic.beta.messages as any).create({
             model: 'claude-3-5-sonnet-20241022',
             max_tokens: 4096,
             system: DEX_COMPUTER_SYSTEM,
             tools: [{
-              type: 'computer_20241022' as const,
+              type: 'computer_20241022',
               name: 'computer',
               display_width_px: screenSize.width,
               display_height_px: screenSize.height,
@@ -106,31 +107,36 @@ export async function POST(req: NextRequest) {
             }],
             messages,
             betas: ['computer-use-2024-10-22'],
-          } as Parameters<typeof anthropic.beta.messages.create>[0])
+          })
 
           // Surface Claude's text thoughts
-          for (const block of response.content) {
-            if (block.type === 'text' && block.text.trim()) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const block of (response.content as any[])) {
+            if (block.type === 'text' && block.text?.trim()) {
               send({ type: 'thought', text: block.text.trim() })
             }
           }
 
           // If no tool calls → task complete
-          const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
-          if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
-            const summary = response.content.find(b => b.type === 'text')?.text ?? 'Task complete.'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const content = response.content as any[]
+          const toolUseBlocks = content.filter((b: any) => b.type === 'tool_use')
+          if (toolUseBlocks.length === 0 || (response as any).stop_reason === 'end_turn') {
+            const summary = content.find((b: any) => b.type === 'text')?.text ?? 'Task complete.'
             send({ type: 'done', summary })
             break
           }
 
           // Add assistant turn to history
-          messages.push({ role: 'assistant', content: response.content })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          messages.push({ role: 'assistant', content: response.content as any })
 
           // Execute each tool call and collect results
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const toolResults: any[] = []
 
-          for (const block of toolUseBlocks) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const block of toolUseBlocks as any[]) {
             if (block.type !== 'tool_use') continue
             checkAbort()
             if (stopped) break
