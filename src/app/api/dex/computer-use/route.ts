@@ -95,18 +95,18 @@ export async function POST(req: NextRequest) {
           // Call Claude with computer_use tool
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const response = await (anthropic.beta.messages as any).create({
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-sonnet-4-5',
             max_tokens: 4096,
             system: DEX_COMPUTER_SYSTEM,
             tools: [{
-              type: 'computer_20241022',
+              type: 'computer_20250124',
               name: 'computer',
               display_width_px: screenSize.width,
               display_height_px: screenSize.height,
               display_number: 1,
             }],
             messages,
-            betas: ['computer-use-2024-10-22'],
+            betas: ['computer-use-2025-01-24'],
           })
 
           // Surface Claude's text thoughts
