@@ -142,9 +142,14 @@ export default function HUD() {
       )
     if (isDexTrigger || t.includes('dex computer mode') || t.includes('dex take over')) {
       const task = transcript
-        .replace(/dex[,\s]+(take the wheel|take control|take over|computer mode|drive|you drive|handle it)[,\s]*/i, '')
-        .trim() || 'Assess the current state of the screen and report what you see.'
-      setDexTask(task)
+        // Strip any variation of the trigger phrase — "dex", "decks", "deck", etc. + action word
+        .replace(/(dex|decks?)[,\s]+(take the wheel|take control|take over|computer mode|drive|you drive|handle it)[,\s]*/gi, '')
+        // Also strip if just the action phrase appears alone after stripping
+        .replace(/^(take the wheel|take control|take over)[,\s]*/gi, '')
+        .trim()
+      // If nothing meaningful remains after stripping, use default task
+      const finalTask = task.length > 3 ? task : 'Assess the current state of the screen and report what you see.'
+      setDexTask(finalTask)
       return true
     }
     if (t.includes('hide left') || t.includes('close left')) { setLeftOpen(false); return true }
