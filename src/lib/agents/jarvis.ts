@@ -68,20 +68,73 @@ function isBuildIntent(message: string): boolean {
   )
 }
 
-function detectRoute(message: string): AgentName {
+function detectRoute(message: string, history?: Array<{ role: string }>): AgentName {
   const lower = message.toLowerCase()
+
+  // Always keep Jarvis for short conversational messages — never hijack mid-chat
+  if (message.length < 20) return 'jarvis'
+  // If already in a conversation, require explicit agent name to switch
+  if (history && history.length >= 4) {
+    const EXPLICIT = ['nova','sage','vault','echo','scout','lister','dex','beacon','ledger','atlas','reel']
+    if (!EXPLICIT.some(a => lower.includes(a))) return 'jarvis'
+  }
+
   if (lower.includes('stripe') || lower.includes('mrr') || lower.includes('subscriber') || lower.includes('nova') || lower.includes('resumechiefz revenue') || lower.includes('conversion')) return 'nova'
-  if (lower.includes('beckett') || lower.includes('custody') || lower.includes('grocery') || lower.includes('bill') || lower.includes('sage') || lower.includes('morning brief') || lower.includes('my week')) return 'sage'
-  if (lower.includes('ebay') || lower.includes('card') || lower.includes('vault') || lower.includes('listing') || lower.includes('card chiefz')) return 'vault'
-  if (lower.includes('post') || lower.includes('content') || lower.includes('linkedin') || lower.includes('echo') || lower.includes('blog') || lower.includes('social')) return 'echo'
-  if (lower.includes('reel') || lower.includes('card chiefz content') || lower.includes('cc post')) return 'reel'
-  if (lower.includes('reddit') || lower.includes('scout') || lower.includes('growth') || lower.includes('traffic') || lower.includes('seo')) return 'scout'
-  if (lower.includes('list') || lower.includes('format listing') || lower.includes('lister')) return 'lister'
-  if (lower.includes('bug') || lower.includes('error') || lower.includes('dex') || lower.includes('system') || lower.includes('site down')) return 'dex'
-  if (lower.includes('goal') || lower.includes('beacon') || lower.includes('accountability') || lower.includes('progress')) return 'beacon'
-  if (lower.includes('finances') || lower.includes('ledger') || lower.includes('money') || lower.includes('savings') || lower.includes('bills overview')) return 'ledger'
-  if (lower.includes('strategy') || lower.includes('atlas') || lower.includes('market intel') || lower.includes('business idea') || lower.includes('acquisition')) return 'atlas'
-  if (lower.includes('outreach') || lower.includes('rc outreach') || lower.includes('linkedin post') || lower.includes('reddit post') || lower.includes('resumechiefz content')) return 'echo'
+  // ── Sage / Personal ─────────────────────────────────────────────────────
+  if (lower.includes('sage') || lower.includes('beckett') || lower.includes('custody') ||
+      lower.includes('morning brief') || lower.includes('my week') ||
+      lower.includes('pickup') || lower.includes('drop off') || lower.includes('drop-off')) return 'sage'
+
+  // ── Nova / ResumeChiefz revenue ──────────────────────────────────────────
+  if (lower.includes('nova') ||
+      lower.includes('resumechiefz revenue') || lower.includes('resumechiefz mrr') ||
+      lower.includes('rc revenue') || lower.includes('rc mrr') || lower.includes('rc stats') ||
+      lower.includes('rc numbers') || lower.includes('stripe') ||
+      (lower.includes('mrr') && lower.includes('resumechiefz'))) return 'nova'
+
+  // ── Vault / Card Chiefz eBay ─────────────────────────────────────────────
+  if (lower.includes('vault') || lower.includes('card chiefz') || lower.includes('ebay') ||
+      lower.includes('cc sales') || lower.includes('card sales') ||
+      (lower.includes('listing') && (lower.includes('ebay') || lower.includes('card')))) return 'vault'
+
+  // ── Echo / Content ───────────────────────────────────────────────────────
+  if (lower.includes('echo') || lower.includes('linkedin post') || lower.includes('rc outreach') ||
+      lower.includes('resumechiefz content') || lower.includes('blog post') ||
+      lower.includes('write a post') || lower.includes('draft a post') ||
+      lower.includes('content plan')) return 'echo'
+
+  // ── Reel ─────────────────────────────────────────────────────────────────
+  if (lower.includes('reel') || lower.includes('cc post') || lower.includes('card chiefz content')) return 'reel'
+
+  // ── Scout / Growth ───────────────────────────────────────────────────────
+  if (lower.includes('scout') || lower.includes('reddit growth') || lower.includes('seo report') ||
+      lower.includes('traffic report') || lower.includes('growth report')) return 'scout'
+
+  // ── Lister ───────────────────────────────────────────────────────────────
+  if (lower.includes('lister') || lower.includes('format listing') || lower.includes('ebay listing') ||
+      lower.includes('create a listing') || lower.includes('make a listing')) return 'lister'
+
+  // ── Dex / System errors ──────────────────────────────────────────────────
+  if (lower.includes('dex') || lower.includes('site down') ||
+      (lower.includes('bug') && lower.includes('fix')) ||
+      (lower.includes('error') && lower.includes('site'))) return 'dex'
+
+  // ── Beacon / Goals ───────────────────────────────────────────────────────
+  if (lower.includes('beacon') || lower.includes('goal velocity') ||
+      lower.includes('accountability check') || lower.includes('weekly accountability') ||
+      lower.includes('am i on track') || lower.includes('on track for')) return 'beacon'
+
+  // ── Ledger / Finances ────────────────────────────────────────────────────
+  if (lower.includes('ledger') || lower.includes('financial snapshot') ||
+      lower.includes('bills overview') || lower.includes('net worth') ||
+      lower.includes('savings rate')) return 'ledger'
+
+  // ── Atlas / Strategy ─────────────────────────────────────────────────────
+  if (lower.includes('atlas') || lower.includes('market intel') ||
+      lower.includes('business idea') || lower.includes('acquisition') ||
+      lower.includes('seven figure') || lower.includes('7 figure') ||
+      lower.includes('7-figure roadmap')) return 'atlas'
+
   return 'jarvis'
 }
 
@@ -444,7 +497,7 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
 
   const [context, route] = await Promise.all([
     getCachedContext(),
-    Promise.resolve(detectRoute(userMessage)),
+    Promise.resolve(detectRoute(userMessage, history)),
   ])
 
   const usesSonnet = needsSonnet(userMessage, route)
@@ -694,7 +747,7 @@ export async function* chatStream(
   }
 
   // Main path — route, enrich, stream
-  const route = detectRoute(userMessage)
+  const route = detectRoute(userMessage, history)
   const usesSonnet = needsSonnet(userMessage, route)
   const model = usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
   const telemetryAgent: AgentName = route !== 'jarvis' ? route : 'jarvis'
