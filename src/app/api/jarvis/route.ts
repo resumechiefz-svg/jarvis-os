@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
-import { morningBrief } from '@/lib/agents/jarvis'
-import { chatStream } from '@/lib/agents/jarvis-stream'
+import { morningBrief, chatStream } from '@/lib/agents/jarvis'
 
 // Pre-warm on module load
 import('@/lib/agents/jarvis').then(m => m.invalidateContextCache?.()).catch(() => {})

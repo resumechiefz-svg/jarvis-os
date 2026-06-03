@@ -622,3 +622,147 @@ export async function morningBrief(): Promise<JarvisResponse> {
   const message = response.content[0].type === 'text' ? response.content[0].text : ''
   return { agent: 'jarvis', message }
 }
+
+// ── Streaming chat — yields SSE events token by token ─────────────────────────
+export type StreamEvent =
+  | { type: 'agent'; agent: AgentName }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; fullText: string }
+  | { type: 'error'; message: string }
+
+async function* yieldStatic(agent: AgentName, message: string): AsyncGenerator<StreamEvent> {
+  yield { type: 'agent', agent }
+  yield { type: 'delta', text: message }
+  yield { type: 'done', fullText: message }
+}
+
+export async function* chatStream(
+  userMessage: string,
+  history: Array<{ role: 'user' | 'assistant'; content: string }>
+): AsyncGenerator<StreamEvent> {
+  // For all special-cased routes (habits, email, calendar, etc.) — delegate to
+  // the blocking chat() and stream the result as a single chunk
+  const isSpecial =
+    /^(yes,?\s*)?(send|send it|go ahead|confirmed?|do it)\.?$/i.test(userMessage.trim()) ||
+    /schedule|add to (my )?calendar|create (an? )?event|book.*meeting/i.test(userMessage) ||
+    /churn|at.risk|cancel|losing subscribers/i.test(userMessage) ||
+    /post to linkedin|linkedin post|share on linkedin/i.test(userMessage) ||
+    /draft (an? )?email|write (an? )?email|email to|send (an? )?email/i.test(userMessage) ||
+    /habit|streak|how.*doing.*habit|logged|marked?|done|completed|did my/i.test(userMessage) ||
+    /goal velocity|on track|financial independence/i.test(userMessage) ||
+    /write.*blog|blog.*post|auto.?blog/i.test(userMessage) ||
+    /revenue opportunity|atlas.*opportunity/i.test(userMessage) ||
+    /what.*fix|forge.*scan|self.*(heal|improv)/i.test(userMessage) ||
+    /competitor|comp.*scan|market intel/i.test(userMessage) ||
+    /trading patterns|trade journal/i.test(userMessage) ||
+    /(make|create|produce) (a )?(full )?(youtube )?video|youtube pipeline/i.test(userMessage) ||
+    /remember\s*(that|this|:)?/i.test(userMessage)
+
+  if (isSpecial) {
+    try {
+      const result = await chat(userMessage, history)
+      yield* yieldStatic(result.agent, result.message)
+    } catch (err) {
+      yield { type: 'error', message: String(err) }
+    }
+    return
+  }
+
+  // Direct agent address — "Nova, what's going on?"
+  const directAgent = detectDirectAgentAddress(userMessage)
+  if (directAgent) {
+    const stripped = userMessage.replace(new RegExp(`^${directAgent}[,\\s]+`, 'i'), '').trim() || 'what are you working on?'
+    yield { type: 'agent', agent: directAgent as AgentName }
+    const agentSystemMap: Record<string, string> = {
+      jarvis: JARVIS_SYSTEM, nova: NOVA_SYSTEM, sage: SAGE_SYSTEM, vault: VAULT_SYSTEM,
+      echo: ECHO_SYSTEM, reel: REEL_SYSTEM, scout: SCOUT_SYSTEM, lister: LISTER_SYSTEM,
+      dex: DEX_SYSTEM, beacon: BEACON_SYSTEM, ledger: LEDGER_SYSTEM, atlas: ATLAS_SYSTEM,
+    }
+    let full = ''
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-6', max_tokens: 600,
+      system: (agentSystemMap[directAgent] ?? JARVIS_SYSTEM) + getAgentPersonalityPrompt(directAgent) + '\n\nRespond in your own voice. Stay in character.',
+      messages: [...history.slice(-6).map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })), { role: 'user', content: stripped }],
+    })
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        full += event.delta.text; yield { type: 'delta', text: event.delta.text }
+      }
+    }
+    yield { type: 'done', fullText: full }
+    return
+  }
+
+  // Main path — route, enrich, stream
+  const route = detectRoute(userMessage)
+  const usesSonnet = needsSonnet(userMessage, route)
+  const model = usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
+  const telemetryAgent: AgentName = route !== 'jarvis' ? route : 'jarvis'
+  yield { type: 'agent', agent: telemetryAgent }
+
+  // Parallel context fetch
+  let agentIntel = '', beckettCtx = '', liveData = '', profileCtx = '', semanticCtx = ''
+  let sentimentCtx = '', intentionCtx = '', whoopCtx = ''
+
+  const [context] = await Promise.all([
+    getCachedContext(),
+    (async () => {
+      if (route === 'sage' || /beckett|son|custody|pickup|father|dad/i.test(userMessage)) {
+        try { const { getBeckettContext } = await import('./beckett'); beckettCtx = '\n\n' + await getBeckettContext() } catch { /* skip */ }
+      }
+    })(),
+    (async () => {
+      if (isPortfolioQuery(userMessage)) {
+        try { const { getPortfolioBrief } = await import('./tradepilot'); liveData = '\n\n[LIVE PORTFOLIO DATA]\n' + await getPortfolioBrief() } catch { /* skip */ }
+      }
+    })(),
+    (async () => {
+      try { const profile = await loadProfile(); if (profile) profileCtx = `\n\n[AB PROFILE]\nFocus: ${profile.currentFocus.join(', ')}\nGoals: ${profile.activeGoals.join(', ')}\nStyle: ${profile.communicationStyle}` } catch { /* skip */ }
+    })(),
+    (async () => {
+      try { const mems = await searchMemories(userMessage, { limit: 5, minSimilarity: 0.4 }); if (mems.length) semanticCtx = '\n\n[RELEVANT MEMORIES]\n' + mems.map(m => `[${m.category}] ${m.content}`).join('\n') } catch { /* skip */ }
+    })(),
+    import('./sentiment-tracker').then(({ getCurrentSentimentContext: g }) => g().then(r => { sentimentCtx = r }).catch(() => {})).catch(() => {}),
+    import('./weekly-intention').then(({ getIntentionContext: g }) => g().then(r => { intentionCtx = r }).catch(() => {})).catch(() => {}),
+    import('./whoop').then(({ getWhoopContext: g }) => g().then(r => { whoopCtx = r }).catch(() => {})).catch(() => {}),
+  ])
+
+  if (route !== 'jarvis' && AGENT_SYSTEMS[route] && usesSonnet) {
+    agentIntel = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 600,
+      system: AGENT_SYSTEMS[route] + getAgentPersonalityPrompt(route) + context,
+      messages: [{ role: 'user', content: userMessage }],
+    }).then(r => r.content[0].type === 'text' ? `\n\n[${route.toUpperCase()} INTEL]\n${r.content[0].text}` : '').catch(() => '')
+  }
+
+  const isDirectRoute = route !== 'jarvis' && !!agentIntel
+  const enrichment = sentimentCtx + intentionCtx + whoopCtx
+  const systemPrompt = isDirectRoute
+    ? (AGENT_SYSTEMS[route] ?? JARVIS_SYSTEM) + getAgentPersonalityPrompt(route) + context + profileCtx + beckettCtx + semanticCtx + liveData + enrichment
+    : JARVIS_SYSTEM + context + profileCtx + beckettCtx + semanticCtx + liveData + enrichment + agentIntel +
+      (agentIntel ? '\n\nDeliver as JARVIS — synthesized, crisp. Call AB "sir" or "AB".' : '')
+
+  let fullText = ''
+  const stream = anthropic.messages.stream({
+    model, max_tokens: usesSonnet ? 1200 : 400,
+    system: systemPrompt,
+    messages: [...history.slice(-4), { role: 'user', content: userMessage }],
+  })
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      fullText += event.delta.text; yield { type: 'delta', text: event.delta.text }
+    }
+  }
+
+  const clean = fullText.replace(/^#{1,3}\s+/gm, '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^---+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
+  yield { type: 'done', fullText: clean }
+
+  // Post-response async enrichment
+  if (userMessage.length > 20) {
+    Promise.all([
+      saveMemory({ category: 'conversation_summary', content: userMessage.slice(0, 200), context: clean.slice(0, 300), importance: 6 }).catch(() => supabaseAdmin.from('ai_memories').insert({ category: 'conversation_summary', content: userMessage.slice(0, 200), context: clean.slice(0, 300), importance: 6, created_at: new Date().toISOString() })),
+      import('./decision-journal').then(({ detectAndLogDecision: f }) => f(userMessage, clean).catch(() => {})).catch(() => {}),
+      import('./relationship-tracker').then(({ detectContactMention: f }) => f(userMessage, clean).catch(() => {})).catch(() => {}),
+    ]).catch(() => {})
+  }
+}
