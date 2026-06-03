@@ -9,6 +9,8 @@ import RightPanel from '@/components/hud/RightPanel'
 import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
 import AgentPanel from '@/components/hud/AgentPanel'
 import FloatingPanel from '@/components/hud/FloatingPanel'
+import AgentTaskCard from '@/components/hud/AgentTaskCard'
+import { useAgentTasks } from '@/lib/hooks/useAgentTasks'
 import type { Message, AgentName } from '@/lib/types'
 import type { PanelData } from '@/components/hud/FloatingPanel'
 
@@ -56,6 +58,7 @@ export default function HUD() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
+  const { tasks, startTask, completeTask, errorTask, dismissTask } = useAgentTasks()
   const [portfolio, setPortfolio] = useState<{ equity: number; dayPL: number; dayPLPct: number } | null>(null)
   const [nova, setNova] = useState<{ mrr: number; activeUsers: number; newSubs: number } | null>(null)
   const [vault, setVault] = useState<{ weeklyRevenue: number; monthlySales: number; totalSales: number } | null>(null)
@@ -303,10 +306,37 @@ export default function HUD() {
                 </div>
               </div>
 
-              {/* Floating panels — appear over orb area */}
+              {/* Floating data panels */}
               {panels.map((panel, i) => (
                 <FloatingPanel key={panel.id} panel={panel} onDismiss={dismissPanel} index={i} />
               ))}
+
+              {/* Agent task cards — appear when Jarvis routes to a sub-agent */}
+              {tasks.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: 12,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex',
+                  gap: 8,
+                  zIndex: 18,
+                  pointerEvents: 'none', // cards themselves have pointer events
+                }}>
+                  <style>{`
+                    @keyframes progressPulse {
+                      0%   { width: 15%; opacity: 0.6; }
+                      50%  { width: 75%; opacity: 1; }
+                      100% { width: 15%; opacity: 0.6; }
+                    }
+                  `}</style>
+                  {tasks.map((task, i) => (
+                    <div key={task.id} style={{ pointerEvents: 'auto' }}>
+                      <AgentTaskCard task={task} onDismiss={dismissTask} index={i} />
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Agent side panel */}
               <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 15 }}>
@@ -382,6 +412,9 @@ export default function HUD() {
             onMessage={msg => setMessages(prev => [...prev, msg])}
             onAgentChange={setActiveAgent}
             onAmplitude={setAmplitude}
+            onTaskStart={startTask}
+            onTaskComplete={completeTask}
+            onTaskError={errorTask}
           />
         </div>
 

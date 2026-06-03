@@ -15,6 +15,9 @@ interface Props {
   onAgentChange: (agent: AgentName) => void
   onAmplitude?: (val: number) => void
   messages: Message[]
+  onTaskStart?: (agent: string, userMessage?: string) => string | undefined
+  onTaskComplete?: (agent: string) => void
+  onTaskError?: (agent: string) => void
 }
 
 const QUICK_COMMANDS = [
@@ -30,7 +33,7 @@ const QUICK_COMMANDS = [
 
 const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey travis', 'hey garcia', 'hey davis']
 
-export default function CommandInterface({ onMessage, onAgentChange, onAmplitude, messages }: Props) {
+export default function CommandInterface({ onMessage, onAgentChange, onAmplitude, messages, onTaskStart, onTaskComplete, onTaskError }: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
@@ -330,6 +333,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
 
     let currentAgent: AgentName = 'jarvis'
     let fullText = ''
+    let gotFirstDelta = false
 
     try {
       const res = await fetch('/api/jarvis', {
@@ -364,25 +368,28 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
               currentAgent = event.agent as AgentName
               setStreamingAgent(event.agent)
               onAgentChange(event.agent)
+              // Create task card for sub-agents (not jarvis itself)
+              if (event.agent !== 'jarvis') onTaskStart?.(event.agent, text)
+
             } else if (event.type === 'delta') {
               fullText += event.text
               setStreamingText(fullText)
+
             } else if (event.type === 'done') {
-              // Stream complete — finalize message and speak
               const finalText = event.fullText ?? fullText
               setStreamingText('')
               const botMsg: Message = {
                 id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                agent: currentAgent,
-                content: finalText,
-                timestamp: new Date(),
+                role: 'assistant', agent: currentAgent, content: finalText, timestamp: new Date(),
               }
               onMessage(botMsg)
               setHistory(h => [...h, { role: 'assistant', content: finalText }])
+              onTaskComplete?.(currentAgent)
               speak(finalText, currentAgent)
+
             } else if (event.type === 'error') {
               setStreamingText('')
+              onTaskError?.(currentAgent)
               onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: event.message ?? 'Something went wrong.', timestamp: new Date() })
             }
           } catch { /* malformed SSE line — skip */ }
@@ -390,6 +397,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
       }
     } catch {
       setStreamingText('')
+      onTaskError?.(currentAgent)
       onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: 'Connection error.', timestamp: new Date() })
     } finally {
       setLoading(false)
