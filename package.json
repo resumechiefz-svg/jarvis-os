@@ -5,8 +5,9 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "rm -rf .next && next build",
     "start": "next start",
+    "fresh": "rm -rf .next && next build && pkill -f 'next start' 2>/dev/null; sleep 1 && next start -p 3001",
     "lint": "eslint",
     "slack": "ts-node --project slack-bot/tsconfig.json slack-bot/index.ts",
     "electron": "electron .",
