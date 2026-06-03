@@ -39,28 +39,33 @@ export default function CommandInterface({
 }: Props) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
-  const [micOn, setMicOn] = useState(true)         // user-controlled toggle
+  const [history, setHistory] = useState<Array<{ role: 'user' |  'assistant'; content: string }>>([])
+  const [micOn, setMicOn] = useState(true)
   const [triggered, setTriggered] = useState(false)
-  const [voiceOn, setVoiceOn] = useState(true)      // TTS on/off
+  const [voiceOn, setVoiceOn] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
   const [streamText, setStreamText] = useState('')
   const [streamAgent, setStreamAgent] = useState('jarvis')
+  const [liveTranscript, setLiveTranscript] = useState('')  // what mic hears in real time
 
   // Stable refs — no stale closures
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
-  const recRef = useRef<any>(null)          // SpeechRecognition instance
+  const recRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const historyRef = useRef(history)
   const loadingRef = useRef(false)
-  const micOnRef = useRef(true)             // mirror of micOn for use inside callbacks
+  const micOnRef = useRef(true)
   const speakingRef = useRef(false)
   const voiceOnRef = useRef(true)
   const onAmplitudeRef = useRef(onAmplitude)
+  // Conversation voice engine
+  const accumulatedRef = useRef('')          // words collected while user speaks
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const jarvisLastSaidRef = useRef('')       // what Jarvis was saying when interrupted
 
   // Keep refs in sync
   useEffect(() => { historyRef.current = history }, [history])
@@ -147,18 +152,42 @@ export default function CommandInterface({
   // Keep sendRef current
   useEffect(() => { sendRef.current = sendCommand }, [sendCommand])
 
-  // ── SpeechRecognition ──────────────────────────────────────────────────────
+  // ── Voice engine — continuous listening, pause detection, barge-in ──────────
+
+  const flushSpeech = useCallback((bargeInContext?: string) => {
+    const text = accumulatedRef.current.trim()
+    accumulatedRef.current = ''
+    setLiveTranscript('')
+    if (pauseTimerRef.current) { clearTimeout(pauseTimerRef.current); pauseTimerRef.current = null }
+    if (!text || text.length < 2) return
+
+    // Strip wake words
+    let cmd = text
+    for (const w of WAKE_WORDS) cmd = cmd.replace(new RegExp(w, 'gi'), '').trim()
+    const finalCmd = cmd.length > 1 ? cmd : text
+
+    setTriggered(true)
+    setTimeout(() => setTriggered(false), 2000)
+
+    if (bargeInContext) {
+      // User interrupted Jarvis — send with context so Jarvis can re-incorporate
+      sendRef.current(`[I interrupted you] ${finalCmd}`)
+    } else {
+      sendRef.current(finalCmd)
+    }
+  }, [])
+
   const stopMic = useCallback(() => {
     if (recRef.current) {
       try { recRef.current.abort() } catch { /* ok */ }
       recRef.current = null
     }
+    if (pauseTimerRef.current) { clearTimeout(pauseTimerRef.current); pauseTimerRef.current = null }
   }, [])
 
   const startMic = useCallback(() => {
     if (!micOnRef.current) return
-    if (recRef.current) return  // already running
-    if (speakingRef.current) return  // Jarvis is talking
+    if (recRef.current) return
 
     const w = window as any // eslint-disable-line @typescript-eslint/no-explicit-any
     const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
@@ -166,68 +195,77 @@ export default function CommandInterface({
 
     const r = new SR()
     r.lang = 'en-US'
-    r.continuous = false
-    r.interimResults = false
-    r.maxAlternatives = 3
+    r.continuous = true       // keep running through natural pauses
+    r.interimResults = true   // stream words in real time to input box
+    r.maxAlternatives = 1
     recRef.current = r
 
     r.onresult = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (speakingRef.current) return
-      let transcript = ''
-      for (let i = 0; i < e.results[0].length; i++) {
-        const t = e.results[0][i].transcript.toLowerCase().trim()
-        if (WAKE_WORDS.some(w => t.includes(w))) { transcript = t; break }
-        if (!transcript) transcript = t
+      let interim = ''
+
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          // Accumulate confirmed words
+          accumulatedRef.current += ' ' + e.results[i][0].transcript
+        } else {
+          interim = e.results[i][0].transcript
+        }
       }
-      if (!transcript || transcript.length < 2) return
 
-      const hasWake = WAKE_WORDS.some(w => transcript.includes(w))
-      let cmd = transcript
-      for (const w of WAKE_WORDS) cmd = cmd.replace(w, '').trim()
+      // Show live transcript in input box
+      const display = (accumulatedRef.current + (interim ? ' ' + interim : '')).trim()
+      setLiveTranscript(display)
 
-      if (hasWake || transcript.length > 4) {
-        setTriggered(true)
-        setTimeout(() => setTriggered(false), 2000)
-        sendRef.current(cmd.length > 1 ? cmd : 'hey')
+      // ── Barge-in: user spoke while Jarvis was speaking ──────────────────
+      if (speakingRef.current && accumulatedRef.current.trim().length > 4) {
+        const wasJarvisSaying = jarvisLastSaidRef.current
+        // Cut Jarvis off immediately
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+        setSpeaking(false)
+        speakingRef.current = false
+        onAmplitudeRef.current?.(0)
+        // Give user 1.2s to finish their interrupted thought, then send
+        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current)
+        pauseTimerRef.current = setTimeout(() => flushSpeech(wasJarvisSaying), 1200)
+        return
+      }
+
+      // ── Normal listening: 1.5s silence = done talking ───────────────────
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current)
+      if (accumulatedRef.current.trim().length > 1) {
+        pauseTimerRef.current = setTimeout(() => flushSpeech(), 1500)
       }
     }
 
     r.onend = () => {
-      // ONLY place that schedules restart — prevents double-restart with onerror
       recRef.current = null
-      if (micOnRef.current && !speakingRef.current) {
-        setTimeout(startMic, 500)
-      }
+      // Flush anything buffered before restarting
+      if (accumulatedRef.current.trim().length > 1) flushSpeech()
+      // Restart immediately — stay always-on
+      if (micOnRef.current) setTimeout(startMic, 300)
     }
 
     r.onerror = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      // Just mark error — onend fires right after and handles restart
-      if (e.error === 'not-allowed') {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         micOnRef.current = false
         setMicOn(false)
-        setMicError('Mic blocked — click 🔒 in Chrome address bar → Microphone → Allow → refresh')
-      } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        micOnRef.current = false
-        setMicOn(false)
-        setMicError('Mic not available — check browser permissions')
+        setMicError('Mic blocked — click 🔒 in address bar → Microphone → Allow → refresh')
       }
-      // Do NOT schedule restart here — onend fires next and handles it
+      // onend fires next and handles restart
     }
 
     try { r.start(); setMicError(null) } catch { recRef.current = null }
-  }, [])
+  }, [flushSpeech])
 
-  // Mic toggle
+  // Mic toggle — manual on/off
   const toggleMic = useCallback(() => {
     const next = !micOnRef.current
     micOnRef.current = next
     setMicOn(next)
     setMicError(null)
-    if (next) {
-      startMic()
-    } else {
-      stopMic()
-    }
+    accumulatedRef.current = ''
+    setLiveTranscript('')
+    if (next) { startMic() } else { stopMic() }
   }, [startMic, stopMic])
 
   // Mount — start mic + unlock AudioContext on first gesture
@@ -254,9 +292,13 @@ export default function CommandInterface({
   const speakText = useCallback(async (text: string, agent: string) => {
     if (!voiceOnRef.current || !text.trim()) return
 
-    // Stop mic while speaking
+    // Track what Jarvis is saying for barge-in context
+    jarvisLastSaidRef.current = text
     speakingRef.current = true
-    stopMic()
+    // DON'T stop mic — keep listening for barge-in
+    // Clear any buffered user speech from before Jarvis started
+    accumulatedRef.current = ''
+    setLiveTranscript('')
 
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     setSpeaking(true)
@@ -302,8 +344,10 @@ export default function CommandInterface({
         audioRef.current = null
         setSpeaking(false)
         speakingRef.current = false
-        // Resume mic after speaking
-        setTimeout(startMic, 400)
+        jarvisLastSaidRef.current = ''
+        // Mic was kept running during speech for barge-in.
+        // If it died (network hiccup etc), restart it now.
+        if (!recRef.current && micOnRef.current) setTimeout(startMic, 200)
       }
       audio.onended = done
       audio.onerror = done
@@ -410,13 +454,19 @@ export default function CommandInterface({
             id="jarvis-command"
             name="jarvis-command"
             autoComplete="off"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !loading && send(input)}
-            placeholder={speaking ? '🔊  Jarvis speaking...' : micOn ? '🎙  Say "Hey Jarvis" or type...' : 'Type a command...'}
-            disabled={loading}
+            value={liveTranscript || input}
+            onChange={e => { if (!liveTranscript) setInput(e.target.value) }}
+            onKeyDown={e => e.key === 'Enter' && !loading && (liveTranscript ? flushSpeech() : send(input))}
+            placeholder={
+              speaking ? '🔊  Jarvis speaking — just talk to interrupt...' :
+              loading ? '⏳  Thinking...' :
+              micOn ? '🎙  Listening...' :
+              'Type a command...'
+            }
+            disabled={loading && !liveTranscript}
+            readOnly={!!liveTranscript}
             autoFocus
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#cce8ff', fontSize: 13, fontFamily: 'monospace', caretColor: '#00d4ff' }}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: liveTranscript ? '#00ff88' : '#cce8ff', fontSize: 13, fontFamily: 'monospace', caretColor: '#00d4ff' }}
           />
         </div>
 

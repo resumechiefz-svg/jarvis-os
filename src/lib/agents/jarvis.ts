@@ -177,6 +177,11 @@ function isOutreachIntent(msg: string): boolean {
 }
 
 export async function chat(userMessage: string, history: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<JarvisResponse> {
+  // Strip barge-in prefix before routing — handle it naturally in context
+  const isBargeIn = userMessage.startsWith('[I interrupted you]')
+  const cleanMessage = isBargeIn ? userMessage.replace('[I interrupted you]', '').trim() : userMessage
+  if (isBargeIn) userMessage = cleanMessage
+
   const sessionKey = history.slice(-1)[0]?.content?.slice(0, 20) ?? 'default'
 
   // ── Email send confirmation — "send it" / "yes send" ─────
@@ -693,6 +698,10 @@ export async function* chatStream(
   userMessage: string,
   history: Array<{ role: 'user' | 'assistant'; content: string }>
 ): AsyncGenerator<StreamEvent> {
+  // Strip barge-in prefix — Jarvis handles naturally via conversation context
+  if (userMessage.startsWith('[I interrupted you]')) {
+    userMessage = userMessage.replace('[I interrupted you]', '').trim()
+  }
   // For all special-cased routes (habits, email, calendar, etc.) — delegate to
   // the blocking chat() and stream the result as a single chunk
   const isSpecial =
