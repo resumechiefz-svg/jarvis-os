@@ -24,9 +24,10 @@ interface Props {
   task: string
   onDone: (summary: string) => void
   onAbort: () => void
+  onAbortRef?: React.MutableRefObject<(() => void) | null>
 }
 
-export default function DexControlPanel({ task, onDone, onAbort }: Props) {
+export default function DexControlPanel({ task, onDone, onAbort, onAbortRef }: Props) {
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [log, setLog] = useState<Array<{ type: string; text: string; time: string }>>([])
   const [currentAction, setCurrentAction] = useState('Initializing...')
@@ -133,14 +134,20 @@ export default function DexControlPanel({ task, onDone, onAbort }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task])
 
-  const abort = () => {
+  const abort = useCallback(() => {
     abortedRef.current = true
     setAborted(true)
     setCurrentAction('ABORTED — control returned to AB')
     addLog('abort', 'Dex stopped. AB has control.')
     readerRef.current?.cancel().catch(() => {})
     setTimeout(onAbort, 1200)
-  }
+  }, [onAbort, addLog])
+
+  // Expose abort to parent so voice commands can trigger it
+  useEffect(() => {
+    if (onAbortRef) onAbortRef.current = abort
+    return () => { if (onAbortRef) onAbortRef.current = null }
+  }, [abort, onAbortRef])
 
   const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`
 

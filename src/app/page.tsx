@@ -63,6 +63,7 @@ export default function HUD() {
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
   const [dexTask, setDexTask] = useState<string | null>(null)   // Dex computer control task
+  const dexAbortRef = useRef<(() => void) | null>(null)          // Ref to Dex abort function
   const { tasks, startTask, completeTask, errorTask, dismissTask } = useAgentTasks()
   const [loading, setLoading] = useState(false)
   const [speaking, setSpeaking] = useState(false)
@@ -152,6 +153,18 @@ export default function HUD() {
       setDexTask(finalTask)
       return true
     }
+    // Dex voice abort — "Dex stop", "Dex abort", "Dex I got it", "exit Dex", etc.
+    const isDexAbort = dexTask && (
+      (t.includes('dex') || t.includes('decks')) && (
+        t.includes('stop') || t.includes('abort') || t.includes('exit') ||
+        t.includes('done') || t.includes('got it') || t.includes('enough') || t.includes('back')
+      )
+    )
+    if (isDexAbort) {
+      dexAbortRef.current?.()  // trigger abort animation then close
+      return true
+    }
+
     if (t.includes('hide left') || t.includes('close left')) { setLeftOpen(false); return true }
     if (t.includes('hide right') || t.includes('close right')) { setRightOpen(false); return true }
     if (t.includes('hide both') || t.includes('close both') || t.includes('hide panels') || t.includes('close panels')) {
@@ -243,12 +256,13 @@ export default function HUD() {
       {dexTask && (
         <DexControlPanel
           task={dexTask}
+          onAbortRef={dexAbortRef}
           onDone={(summary) => {
             setMessages(prev => [...prev, {
               id: Date.now().toString(), role: 'assistant', agent: 'dex' as AgentName,
               content: `Task complete: ${summary}`, timestamp: new Date(),
             }])
-            setTimeout(() => setDexTask(null), 3000) // keep visible briefly after done
+            setTimeout(() => setDexTask(null), 3000)
           }}
           onAbort={() => setDexTask(null)}
         />
