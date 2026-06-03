@@ -193,25 +193,25 @@ export default function CommandInterface({
     }
 
     r.onend = () => {
+      // ONLY place that schedules restart — prevents double-restart with onerror
       recRef.current = null
-      // Auto-restart if mic is still on and Jarvis isn't speaking
       if (micOnRef.current && !speakingRef.current) {
-        setTimeout(startMic, 300)
+        setTimeout(startMic, 500)
       }
     }
 
     r.onerror = (e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      recRef.current = null
+      // Just mark error — onend fires right after and handles restart
       if (e.error === 'not-allowed') {
         micOnRef.current = false
         setMicOn(false)
-        setMicError('Mic blocked — click 🔒 in address bar → Microphone → Allow → refresh')
-      } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        setMicError(`Mic: ${e.error}`)
+        setMicError('Mic blocked — click 🔒 in Chrome address bar → Microphone → Allow → refresh')
+      } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        micOnRef.current = false
+        setMicOn(false)
+        setMicError('Mic not available — check browser permissions')
       }
-      if (micOnRef.current && !speakingRef.current && e.error !== 'not-allowed') {
-        setTimeout(startMic, 1000)
-      }
+      // Do NOT schedule restart here — onend fires next and handles it
     }
 
     try { r.start(); setMicError(null) } catch { recRef.current = null }
