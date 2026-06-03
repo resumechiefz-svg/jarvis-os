@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server'
 import { morningBrief } from '@/lib/agents/jarvis'
+
 export async function GET() {
   const brief = await morningBrief()
-  // Also speak it via ElevenLabs
-  if (brief.message) {
-    fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3001'}/api/speak`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.JARVIS_SESSION_SECRET}` },
-      body: JSON.stringify({ text: brief.message, agent: 'jarvis' }),
-    }).catch(() => {})
-  }
+  // TTS is handled by the HUD client — only Jarvis speaks via the client-side speakText pipeline.
+  // Never call /api/speak from the server — that creates a second voice channel.
   return NextResponse.json(brief)
 }

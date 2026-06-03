@@ -68,6 +68,7 @@ export default function CommandInterface({
   const accumulatedRef = useRef('')          // words collected while user speaks
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const jarvisLastSaidRef = useRef('')       // what Jarvis was saying when interrupted
+  const commandQueueRef = useRef<string[]>([])  // holds commands received during active task
 
   // Keep refs in sync
   useEffect(() => { historyRef.current = history }, [history])
@@ -77,9 +78,21 @@ export default function CommandInterface({
   // ── sendCommand — defined early, stable via ref ────────────────────────────
   // We expose it via sendRef so recognition callbacks always call the latest version
   const sendRef = useRef<(text: string) => void>(() => {})
+  // speakRef allows sendCommand to call speakText before it's defined in closure order
+  const speakRef = useRef<(text: string, agent: string) => void>(() => {})
 
   const sendCommand = useCallback(async (text: string) => {
-    if (!text.trim() || loadingRef.current) return
+    if (!text.trim()) return
+
+    // ── Task lock: if an agent is actively working, queue and acknowledge ──
+    if (loadingRef.current) {
+      commandQueueRef.current.push(text)
+      const ack = 'Noted — finishing current task first. I\'ll get to that right after.'
+      onMessage({ id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: ack, timestamp: new Date() })
+      speakRef.current(ack, 'jarvis')
+      return
+    }
+
     loadingRef.current = true
     setLoading(true)
     onLoadingChange?.(true)
@@ -149,11 +162,14 @@ export default function CommandInterface({
       setLoading(false)
       onLoadingChange?.(false)
       onAgentChange('jarvis')
+      // Drain command queue — process next queued command if any
+      const next = commandQueueRef.current.shift()
+      if (next) setTimeout(() => sendRef.current(next), 600)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onMessage, onAgentChange, onTaskStart, onTaskComplete, onTaskError])
 
-  // Keep sendRef current
+  // Keep refs current
   useEffect(() => { sendRef.current = sendCommand }, [sendCommand])
 
   // ── Voice engine — continuous listening, pause detection, barge-in ──────────
@@ -365,6 +381,9 @@ export default function CommandInterface({
     }
   }, [stopMic, startMic])
 
+  // Keep speakRef current so sendCommand can call speakText before it's in scope
+  useEffect(() => { speakRef.current = speakText }, [speakText])
+
   // ── Image upload ───────────────────────────────────────────────────────────
   const handleImageUpload = useCallback(async (file: File) => {
     if (!file || analyzing) return
@@ -375,9 +394,10 @@ export default function CommandInterface({
       const res = await fetch('/api/vision', { method: 'POST', body: fd })
       const data = await res.json()
       const reply = data.text ?? 'Could not analyze.'
-      onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'vault', content: reply, timestamp: new Date() })
-      onAgentChange('vault')
-      speakText(reply, 'vault')
+      // Route through Jarvis — Vault's analysis is spoken by Jarvis, not by Vault directly
+      onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: reply, timestamp: new Date() })
+      onAgentChange('jarvis')
+      speakText(reply, 'jarvis')  // Always jarvis voice
     } catch {
       onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: 'Vision error.', timestamp: new Date() })
     } finally { setAnalyzing(false); setInput('') }

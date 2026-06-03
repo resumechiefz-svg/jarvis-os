@@ -7,7 +7,6 @@ import AgentBar from '@/components/hud/AgentBar'
 import LeftPanel from '@/components/hud/LeftPanel'
 import RightPanel from '@/components/hud/RightPanel'
 import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
-import AgentPanel from '@/components/hud/AgentPanel'
 import FloatingPanel from '@/components/hud/FloatingPanel'
 import { useAgentTasks } from '@/lib/hooks/useAgentTasks'
 const MiniAgentOrb = dynamic(() => import('@/components/orb/MiniAgentOrb'), { ssr: false })
@@ -365,10 +364,7 @@ export default function HUD() {
                 </div>
               )}
 
-              {/* Agent side panel */}
-              <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 15 }}>
-                <AgentPanel messages={messages} />
-              </div>
+              {/* Agent orbs float beside Jarvis — rendered via MiniAgentOrb in task row above */}
             </div>
 
             {/* ── Live feed strip — collapsible ── */}
