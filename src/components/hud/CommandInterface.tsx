@@ -38,13 +38,14 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
   const [listening, setListening] = useState(false)
+  const [micEnabled, setMicEnabled] = useState(true)   // USER'S INTENT — never flickers
   const [triggered, setTriggered] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
-  const [streamingText, setStreamingText] = useState('')        // live token stream
-  const [streamingAgent, setStreamingAgent] = useState<string>('jarvis') // agent name while streaming
+  const [streamingText, setStreamingText] = useState('')
+  const [streamingAgent, setStreamingAgent] = useState<string>('jarvis')
 
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -437,24 +438,26 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   }, [analyzingImage, input, onMessage, onAgentChange, speak])
 
   const toggleMic = useCallback(() => {
-    // Always reset mute — never let it stay stuck
-    micMutedRef.current = false
-    setMicError(null)
+    const currentlyEnabled = !micMutedRef.current || recognitionRef.current !== null || listening
 
-    if (listening || recognitionRef.current) {
+    if (currentlyEnabled) {
+      // ── TURN OFF ── set mute FIRST so onend handler doesn't restart
+      micMutedRef.current = true
+      setMicEnabled(false)
+      if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null }
       stopRecognition()
-      return
+    } else {
+      // ── TURN ON ──
+      const w = window as any // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (!w.SpeechRecognition && !w.webkitSpeechRecognition) {
+        setMicError('Speech recognition requires Chrome')
+        return
+      }
+      micMutedRef.current = false
+      setMicEnabled(true)
+      setMicError(null)
+      startRecognition()
     }
-
-    // Check browser support
-    const w = window as any // eslint-disable-line @typescript-eslint/no-explicit-any
-    if (!w.SpeechRecognition && !w.webkitSpeechRecognition) {
-      setMicError('Speech recognition requires Chrome — switch browsers')
-      return
-    }
-
-    // Start immediately — let SpeechRecognition trigger its own permission prompt
-    startRecognition()
   }, [listening, startRecognition, stopRecognition])
 
   // ── Render — slim command bar ─────────────────────────────────────────────────
@@ -554,7 +557,7 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send(input)}
-            placeholder={listening ? '🎙  Listening... say "Hey Jarvis"' : speaking ? '🔊  Speaking...' : 'Command Jarvis or type anything...'}
+            placeholder={micEnabled && listening ? '🎙  Listening... say "Hey Jarvis"' : speaking ? '🔊  Speaking...' : micEnabled ? '🎙  Say "Hey Jarvis" or type...' : 'Command Jarvis or type anything...'}
             disabled={loading}
             autoFocus
             style={{
@@ -598,9 +601,9 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
             show: true,
             onClick: toggleMic,
             disabled: false,
-            title: listening ? 'Mic on' : 'Mic off',
-            content: listening ? <Mic size={13} /> : <MicOff size={13} />,
-            active: listening || triggered,
+            title: micEnabled ? 'Mic on — click to mute' : 'Mic off — click to enable',
+            content: micEnabled ? <Mic size={13} /> : <MicOff size={13} />,
+            active: micEnabled || triggered,
             activeColor: triggered ? '#00d4ff' : '#00ff88',
           },
         ].filter(b => b.show).map((btn, i) => (
