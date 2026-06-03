@@ -71,6 +71,9 @@ function isBuildIntent(message: string): boolean {
 function detectRoute(message: string, history?: Array<{ role: string }>): AgentName {
   const lower = message.toLowerCase()
 
+  // "Dex, take the wheel" is intercepted client-side — if it leaks through, return jarvis
+  if (lower.includes('take the wheel') || lower.includes('take control') || lower.includes('computer mode')) return 'jarvis'
+
   // Always keep Jarvis for short conversational messages — never hijack mid-chat
   if (message.length < 20) return 'jarvis'
   // If already in a conversation, require explicit agent name to switch

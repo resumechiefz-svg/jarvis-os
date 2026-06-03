@@ -17,6 +17,7 @@ import type { PanelData } from '@/components/hud/FloatingPanel'
 
 const CommandInterface = dynamic(() => import('@/components/hud/CommandInterface'), { ssr: false })
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
+const DexControlPanel = dynamic(() => import('@/components/hud/DexControlPanel'), { ssr: false })
 
 const AGENT_COLORS: Record<string, string> = {
   jarvis: '#00d4ff', nova: '#a855f7', sage: '#00ff88', vault: '#c9a84c',
@@ -61,6 +62,7 @@ export default function HUD() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
+  const [dexTask, setDexTask] = useState<string | null>(null)   // Dex computer control task
   const { tasks, startTask, completeTask, errorTask, dismissTask } = useAgentTasks()
   const [loading, setLoading] = useState(false)
   const [speaking, setSpeaking] = useState(false)
@@ -127,9 +129,24 @@ export default function HUD() {
     setPanels(prev => prev.filter(p => p.id !== id))
   }, [])
 
-  // Voice-controlled panel visibility
+  // Voice-controlled panel visibility + Dex computer mode trigger
   const handleVoicePanel = useCallback((transcript: string) => {
     const t = transcript.toLowerCase()
+
+    // Dex computer control — broad matching for voice recognition variations
+    const isDexTrigger =
+      (t.includes('dex') || t.includes('decks')) && (
+        t.includes('wheel') || t.includes('take control') ||
+        t.includes('take over') || t.includes('computer mode') ||
+        t.includes('drive') || t.includes('you drive') || t.includes('handle it')
+      )
+    if (isDexTrigger || t.includes('dex computer mode') || t.includes('dex take over')) {
+      const task = transcript
+        .replace(/dex[,\s]+(take the wheel|take control|take over|computer mode|drive|you drive|handle it)[,\s]*/i, '')
+        .trim() || 'Assess the current state of the screen and report what you see.'
+      setDexTask(task)
+      return true
+    }
     if (t.includes('hide left') || t.includes('close left')) { setLeftOpen(false); return true }
     if (t.includes('hide right') || t.includes('close right')) { setRightOpen(false); return true }
     if (t.includes('hide both') || t.includes('close both') || t.includes('hide panels') || t.includes('close panels')) {
@@ -216,6 +233,21 @@ export default function HUD() {
   return (
     <>
       <HexGrid />
+
+      {/* Dex computer control overlay — fullscreen when active */}
+      {dexTask && (
+        <DexControlPanel
+          task={dexTask}
+          onDone={(summary) => {
+            setMessages(prev => [...prev, {
+              id: Date.now().toString(), role: 'assistant', agent: 'dex' as AgentName,
+              content: `Task complete: ${summary}`, timestamp: new Date(),
+            }])
+            setTimeout(() => setDexTask(null), 3000) // keep visible briefly after done
+          }}
+          onAbort={() => setDexTask(null)}
+        />
+      )}
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; overflow: hidden; background: #010409; font-family: 'Courier New', monospace; color: white; }

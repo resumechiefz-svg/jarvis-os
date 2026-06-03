@@ -84,6 +84,9 @@ export default function CommandInterface({
   const sendCommand = useCallback(async (text: string) => {
     if (!text.trim()) return
 
+    // ── Check panel/Dex voice commands first — intercept before anything else ──
+    if (onVoicePanel?.(text)) return
+
     // ── Task lock: if an agent is actively working, queue and acknowledge ──
     if (loadingRef.current) {
       commandQueueRef.current.push(text)
