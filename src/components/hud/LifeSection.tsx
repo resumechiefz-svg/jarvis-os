@@ -250,6 +250,9 @@ export default function LifeSection() {
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 4, marginBottom: 4 }}>
             <input
               ref={inputRef}
+              id="todo-input"
+              name="todo-input"
+              autoComplete="off"
               value={newTodo}
               onChange={e => setNewTodo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addTodo()}

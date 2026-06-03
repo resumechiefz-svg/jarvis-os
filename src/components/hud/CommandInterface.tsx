@@ -407,6 +407,9 @@ export default function CommandInterface({
           <span style={{ fontSize: 11, color: 'rgba(0,212,255,0.3)', marginRight: 8, fontFamily: 'monospace' }}>›</span>
           <input
             ref={inputRef}
+            id="jarvis-command"
+            name="jarvis-command"
+            autoComplete="off"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !loading && send(input)}
