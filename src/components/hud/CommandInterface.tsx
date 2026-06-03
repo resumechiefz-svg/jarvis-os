@@ -40,6 +40,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   const [speaking, setSpeaking] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [micError, setMicError] = useState<string | null>(null)
+  const [streamingText, setStreamingText] = useState('')        // live token stream
+  const [streamingAgent, setStreamingAgent] = useState<string>('jarvis') // agent name while streaming
 
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -311,13 +313,14 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     }
   }, [startRecognition, stopRecognition])
 
-  // ── Send command ──────────────────────────────────────────────────────────────
+  // ── Send command — SSE streaming ──────────────────────────────────────────
 
   const sendCommand = useCallback(async (text: string) => {
     if (!text.trim() || loadingRef.current) return
 
     setInput('')
     setLoading(true)
+    setStreamingText('')
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', agent: 'jarvis', content: text, timestamp: new Date() }
     onMessage(userMsg)
@@ -325,21 +328,68 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     const newHistory = [...historyRef.current, { role: 'user' as const, content: text }]
     setHistory(newHistory)
 
+    let currentAgent: AgentName = 'jarvis'
+    let fullText = ''
+
     try {
       const res = await fetch('/api/jarvis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history: newHistory }),
       })
-      const data = await res.json()
-      const agent: AgentName = data.agent ?? 'jarvis'
-      onAgentChange(agent)
-      const reply = data.message ?? data.error ?? 'No response.'
-      const botMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', agent, content: reply, timestamp: new Date() }
-      onMessage(botMsg)
-      setHistory(h => [...h, { role: 'assistant', content: reply }])
-      speak(reply, agent)
+
+      if (!res.body) throw new Error('No response body')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // SSE lines are separated by \n\n
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+
+        for (const part of parts) {
+          const line = part.trim()
+          if (!line.startsWith('data: ')) continue
+          try {
+            const event = JSON.parse(line.slice(6))
+
+            if (event.type === 'agent') {
+              currentAgent = event.agent as AgentName
+              setStreamingAgent(event.agent)
+              onAgentChange(event.agent)
+            } else if (event.type === 'delta') {
+              fullText += event.text
+              setStreamingText(fullText)
+            } else if (event.type === 'done') {
+              // Stream complete — finalize message and speak
+              const finalText = event.fullText ?? fullText
+              setStreamingText('')
+              const botMsg: Message = {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                agent: currentAgent,
+                content: finalText,
+                timestamp: new Date(),
+              }
+              onMessage(botMsg)
+              setHistory(h => [...h, { role: 'assistant', content: finalText }])
+              speak(finalText, currentAgent)
+            } else if (event.type === 'error') {
+              setStreamingText('')
+              onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: event.message ?? 'Something went wrong.', timestamp: new Date() })
+            }
+          } catch { /* malformed SSE line — skip */ }
+        }
+      }
     } catch {
+      setStreamingText('')
       onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: 'jarvis', content: 'Connection error.', timestamp: new Date() })
     } finally {
       setLoading(false)
@@ -406,18 +456,33 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
         </div>
       )}
 
-      {/* Last response toast — shows most recent agent reply */}
-      {messages.length > 0 && (
+      {/* Response display — streams live token by token, then shows last response */}
+      {(streamingText || messages.length > 0) && (
         <div style={{
-          padding: '4px 16px', borderBottom: '1px solid rgba(0,212,255,0.06)',
+          padding: '5px 16px', borderBottom: '1px solid rgba(0,212,255,0.06)',
           display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0,
-          background: 'rgba(0,3,10,0.8)', overflow: 'hidden',
+          background: 'rgba(0,3,10,0.85)', overflow: 'hidden',
+          minHeight: 28,
         }}>
-          {loading ? (
-            <span style={{ fontSize: 11, color: 'rgba(0,212,255,0.5)', fontFamily: 'monospace' }}>
-              ● processing...
+          {streamingText ? (
+            // ── STREAMING: show tokens as they arrive ──
+            <>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', flexShrink: 0, color: AGENT_COLORS[streamingAgent] ?? '#00d4ff' }}>
+                [{streamingAgent.toUpperCase()}]
+              </span>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: 'monospace', flex: 1 }}>
+                {streamingText.replace(/\*+/g, '').split('\n')[0]}
+                <span style={{ animation: 'voice-dot-pulse 0.8s infinite', color: AGENT_COLORS[streamingAgent] ?? '#00d4ff' }}>▋</span>
+              </span>
+            </>
+          ) : loading ? (
+            // ── WAITING for first token ──
+            <span style={{ fontSize: 11, color: 'rgba(0,212,255,0.4)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#00d4ff', display: 'inline-block', animation: 'voice-dot-pulse 0.8s infinite' }} />
+              thinking...
             </span>
           ) : (() => {
+            // ── IDLE: show last completed response ──
             const last = [...messages].reverse().find(m => m.role === 'assistant')
             if (!last) return null
             const color = AGENT_COLORS[last.agent] ?? '#00d4ff'
@@ -426,8 +491,8 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
                 <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '0.15em', flexShrink: 0 }}>
                   [{last.agent.toUpperCase()}]
                 </span>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
-                  {last.content.replace(/\*+/g, '').split('\n')[0].slice(0, 180)}
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
+                  {last.content.replace(/\*+/g, '').split('\n')[0].slice(0, 200)}
                 </span>
               </>
             )
