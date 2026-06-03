@@ -17,6 +17,7 @@ interface Props {
   onAgentChange: (agent: AgentName) => void
   onAmplitude?: (val: number) => void
   onLoadingChange?: (loading: boolean) => void
+  onVoicePanel?: (transcript: string) => boolean
   messages: Message[]
   onTaskStart?: (agent: string, userMessage?: string) => string | undefined
   onTaskComplete?: (agent: string) => void
@@ -35,7 +36,7 @@ const QUICK_COMMANDS = [
 ]
 
 export default function CommandInterface({
-  onMessage, onAgentChange, onAmplitude, onLoadingChange, messages,
+  onMessage, onAgentChange, onAmplitude, onLoadingChange, onVoicePanel, messages,
   onTaskStart, onTaskComplete, onTaskError,
 }: Props) {
   const [input, setInput] = useState('')
@@ -172,13 +173,15 @@ export default function CommandInterface({
     setTriggered(true)
     setTimeout(() => setTriggered(false), 2000)
 
+    // Check for panel voice commands first — don't send to Jarvis if handled
+    if (onVoicePanel?.(finalCmd)) return
+
     if (bargeInContext) {
-      // User interrupted Jarvis — send with context so Jarvis can re-incorporate
       sendRef.current(`[I interrupted you] ${finalCmd}`)
     } else {
       sendRef.current(finalCmd)
     }
-  }, [])
+  }, [onVoicePanel])
 
   const stopMic = useCallback(() => {
     if (recRef.current) {

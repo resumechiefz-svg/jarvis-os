@@ -9,8 +9,8 @@ import RightPanel from '@/components/hud/RightPanel'
 import VoiceInterrupt from '@/components/hud/VoiceInterrupt'
 import AgentPanel from '@/components/hud/AgentPanel'
 import FloatingPanel from '@/components/hud/FloatingPanel'
-import AgentTaskCard from '@/components/hud/AgentTaskCard'
 import { useAgentTasks } from '@/lib/hooks/useAgentTasks'
+const MiniAgentOrb = dynamic(() => import('@/components/orb/MiniAgentOrb'), { ssr: false })
 import { useJarvisState } from '@/lib/hooks/useJarvisState'
 import HexGrid from '@/components/hud/HexGrid'
 import type { Message, AgentName } from '@/lib/types'
@@ -51,8 +51,10 @@ export default function HUD() {
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [amplitude, setAmplitude] = useState(0)
-  const [leftOpen, setLeftOpen] = useState(true)   // start open — data visible immediately
-  const [rightOpen, setRightOpen] = useState(true)  // start open
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const leftTapRef = useRef(0)    // double-tap detection
+  const rightTapRef = useRef(0)
   const [feedOpen, setFeedOpen] = useState(false)
   const [mrr, setMrr] = useState(0)
   const [orbSize, setOrbSize] = useState(380)
@@ -126,6 +128,22 @@ export default function HUD() {
     setPanels(prev => prev.filter(p => p.id !== id))
   }, [])
 
+  // Voice-controlled panel visibility
+  const handleVoicePanel = useCallback((transcript: string) => {
+    const t = transcript.toLowerCase()
+    if (t.includes('hide left') || t.includes('close left')) { setLeftOpen(false); return true }
+    if (t.includes('hide right') || t.includes('close right')) { setRightOpen(false); return true }
+    if (t.includes('hide both') || t.includes('close both') || t.includes('hide panels') || t.includes('close panels')) {
+      setLeftOpen(false); setRightOpen(false); return true
+    }
+    if (t.includes('show panels') || t.includes('open panels') || t.includes('show both') || t.includes('expand panels')) {
+      setLeftOpen(true); setRightOpen(true); return true
+    }
+    if (t.includes('show left') || t.includes('open left')) { setLeftOpen(true); return true }
+    if (t.includes('show right') || t.includes('open right')) { setRightOpen(true); return true }
+    return false
+  }, [])
+
   // Data polling
   useEffect(() => {
     let alive = true
@@ -186,15 +204,7 @@ export default function HUD() {
     const preview = last.content.replace(/\*+/g, '').split('\n')[0].slice(0, 100)
     addFeed({ type: 'agent', text: preview, color: AGENT_COLORS[last.agent] })
 
-    // Auto-open panel if content suggests data
-    const lower = last.content.toLowerCase()
-    if ((lower.includes('equity') || lower.includes('portfolio') || lower.includes('tradepilot')) && portfolio) {
-      setTimeout(() => openPanel('portfolio'), 400)
-    } else if ((lower.includes('mrr') || lower.includes('resumechiefz') || lower.includes('subscribers')) && nova) {
-      setTimeout(() => openPanel('rc'), 400)
-    } else if ((lower.includes('card chiefz') || lower.includes('ebay') || lower.includes('sales')) && vault) {
-      setTimeout(() => openPanel('sales'), 400)
-    }
+    // Panels only open when explicitly requested — no auto-triggers
   }, [messages, addFeed, openPanel, portfolio, nova, vault])
 
   const agentColor = AGENT_COLORS[activeAgent] ?? '#00d4ff'
@@ -240,9 +250,14 @@ export default function HUD() {
             transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
             overflow: 'hidden', position: 'relative', zIndex: 10,
           }}>
-            {/* Toggle strip */}
+            {/* Toggle strip — single click toggles, double click hides with dissolve */}
             <div
-              onClick={() => setLeftOpen(o => !o)}
+              onClick={() => {
+                const now = Date.now()
+                if (now - leftTapRef.current < 350) { setLeftOpen(false) } // double-tap = hide
+                else { setLeftOpen(o => !o) }
+                leftTapRef.current = now
+              }}
               style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', zIndex: 11, background: leftOpen ? 'transparent' : 'rgba(0,4,14,0.95)' }}
             >
               {['◈', '◉', '▲', '◆'].map((icon, i) => (
@@ -336,9 +351,15 @@ export default function HUD() {
                       100% { width: 15%; opacity: 0.6; }
                     }
                   `}</style>
-                  {tasks.map((task, i) => (
+                  {tasks.map((task) => (
                     <div key={task.id} style={{ pointerEvents: 'auto' }}>
-                      <AgentTaskCard task={task} onDismiss={dismissTask} index={i} />
+                      <MiniAgentOrb
+                        agent={task.agent}
+                        color={task.color}
+                        status={task.status as 'thinking' | 'working' | 'complete' | 'error'}
+                        startedAt={task.startedAt}
+                        onDismiss={() => dismissTask(task.id)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -430,6 +451,7 @@ export default function HUD() {
             onAgentChange={agent => { setActiveAgent(agent); markActive() }}
             onAmplitude={amp => { setAmplitude(amp); if (amp > 0.05) setSpeaking(true); else setSpeaking(false) }}
             onLoadingChange={setLoading}
+            onVoicePanel={handleVoicePanel}
             onTaskStart={startTask}
             onTaskComplete={completeTask}
             onTaskError={errorTask}

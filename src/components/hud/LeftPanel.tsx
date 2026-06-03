@@ -53,7 +53,7 @@ export default function LeftPanel() {
   const chg = (v: number) => v >= 0 ? up : dn
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '10px 12px' }}>
+    <div className="panel-scan" style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '10px 12px', position: 'relative' }}>
 
       <Section title="TradePilot" badge={portfolio ? (portfolio.isLive ? '● LIVE' : '● PAPER') : 'ALPACA'}>
         <Row label="Equity" value={portfolio ? `$${portfolio.equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'} color={up} />
