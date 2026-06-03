@@ -402,6 +402,10 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
     } finally {
       setLoading(false)
       onAgentChange('jarvis')
+      // Safety: ensure mic is never permanently stuck muted after a request
+      if (!speaking) {
+        micMutedRef.current = false
+      }
     }
   }, [onMessage, onAgentChange, speak])
 
@@ -433,21 +437,57 @@ export default function CommandInterface({ onMessage, onAgentChange, onAmplitude
   }, [analyzingImage, input, onMessage, onAgentChange, speak])
 
   const toggleMic = useCallback(async () => {
-    if (listening) {
+    console.log('[Mic toggle] listening:', listening, 'micMuted:', micMutedRef.current, 'recognitionRef:', !!recognitionRef.current)
+
+    if (listening || recognitionRef.current) {
+      // Turn off
       stopRecognition()
       micMutedRef.current = true
-    } else {
-      micMutedRef.current = false
-      setMicError(null)
-      // Explicitly request mic permission first — this makes Chrome prompt the user
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch (err) {
-        setMicError('Mic denied — click 🔒 in address bar and allow microphone')
-        return
-      }
-      startRecognition()
+      console.log('[Mic toggle] turned OFF')
+      return
     }
+
+    // Turn on — reset mute state unconditionally first
+    micMutedRef.current = false
+    setMicError(null)
+
+    // Check if mediaDevices API is available
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicError('Mic API not available — use Chrome on localhost')
+      console.error('[Mic toggle] mediaDevices not available')
+      return
+    }
+
+    // Request mic permission explicitly — prompts Chrome if not yet granted
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Got permission — release the stream immediately (SpeechRecognition manages its own)
+      stream.getTracks().forEach(t => t.stop())
+      console.log('[Mic toggle] permission granted')
+    } catch (err) {
+      const e = err as DOMException
+      console.error('[Mic toggle] permission error:', e.name, e.message)
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        setMicError('Mic blocked — click 🔒 in Chrome address bar → Microphone → Allow, then refresh')
+      } else if (e.name === 'NotFoundError') {
+        setMicError('No microphone found — check your mic is connected')
+      } else {
+        setMicError(`Mic error: ${e.name} — ${e.message}`)
+      }
+      return
+    }
+
+    // SpeechRecognition check
+    const w = window as any // eslint-disable-line @typescript-eslint/no-explicit-any
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
+    if (!SR) {
+      setMicError('Speech recognition not supported — use Chrome')
+      console.error('[Mic toggle] SpeechRecognition not available')
+      return
+    }
+
+    console.log('[Mic toggle] starting recognition...')
+    startRecognition()
   }, [listening, startRecognition, stopRecognition])
 
   // ── Render — slim command bar ─────────────────────────────────────────────────

@@ -49,8 +49,8 @@ export default function HUD() {
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [amplitude, setAmplitude] = useState(0)
-  const [leftOpen, setLeftOpen] = useState(false)
-  const [rightOpen, setRightOpen] = useState(false)
+  const [leftOpen, setLeftOpen] = useState(true)   // start open — data visible immediately
+  const [rightOpen, setRightOpen] = useState(true)  // start open
   const [feedOpen, setFeedOpen] = useState(false)
   const [mrr, setMrr] = useState(0)
   const [orbSize, setOrbSize] = useState(380)
@@ -197,7 +197,7 @@ export default function HUD() {
 
   if (isMobile) return <MobileChat />
 
-  const PANEL_W = 300
+  const PANEL_W = 260
 
   return (
     <>
