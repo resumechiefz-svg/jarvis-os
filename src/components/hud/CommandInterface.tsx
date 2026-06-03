@@ -16,6 +16,7 @@ interface Props {
   onMessage: (msg: Message) => void
   onAgentChange: (agent: AgentName) => void
   onAmplitude?: (val: number) => void
+  onLoadingChange?: (loading: boolean) => void
   messages: Message[]
   onTaskStart?: (agent: string, userMessage?: string) => string | undefined
   onTaskComplete?: (agent: string) => void
@@ -34,7 +35,7 @@ const QUICK_COMMANDS = [
 ]
 
 export default function CommandInterface({
-  onMessage, onAgentChange, onAmplitude, messages,
+  onMessage, onAgentChange, onAmplitude, onLoadingChange, messages,
   onTaskStart, onTaskComplete, onTaskError,
 }: Props) {
   const [input, setInput] = useState('')
@@ -80,6 +81,7 @@ export default function CommandInterface({
     if (!text.trim() || loadingRef.current) return
     loadingRef.current = true
     setLoading(true)
+    onLoadingChange?.(true)
     setInput('')
     setStreamText('')
 
@@ -144,6 +146,7 @@ export default function CommandInterface({
     } finally {
       loadingRef.current = false
       setLoading(false)
+      onLoadingChange?.(false)
       onAgentChange('jarvis')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -475,7 +478,18 @@ export default function CommandInterface({
           { show: true, onClick: () => imageInputRef.current?.click(), title: 'Upload', icon: <Camera size={13} />, active: analyzing, color: '#fbbf24' },
           { show: speaking, onClick: () => { audioRef.current?.pause(); audioRef.current = null; setSpeaking(false); speakingRef.current = false; setTimeout(startMic, 200) }, title: 'Stop', icon: <Square size={13} />, active: true, color: '#ff4455' },
           { show: true, onClick: () => { setVoiceOn(v => !v); voiceOnRef.current = !voiceOnRef.current }, title: voiceOn ? 'Mute TTS' : 'Unmute TTS', icon: voiceOn ? <Volume2 size={13} /> : <VolumeX size={13} />, active: voiceOn, color: '#00d4ff' },
-          { show: true, onClick: toggleMic, title: micOn ? 'Mic on — click to mute' : 'Mic off — click to enable', icon: micOn ? <Mic size={13} /> : <MicOff size={13} />, active: micOn || triggered, color: triggered ? '#00d4ff' : '#00ff88' },
+          { show: true, onClick: toggleMic, title: micOn ? 'Mic on — click to mute' : 'Mic off — click to enable',
+            icon: micOn ? (
+              <div style={{ display:'flex', alignItems:'center', gap:2, width:32, height:14 }}>
+                {[0.4,0.7,1,0.7,1,0.7,0.4].map((h,i) => (
+                  <div key={i} style={{ width:2, flex:1, background: triggered ? '#00d4ff' : '#00ff88', borderRadius:1, transformOrigin:'bottom',
+                    animation: micOn ? `waveBar ${0.4+i*0.07}s ease-in-out infinite alternate` : 'none',
+                    animationDelay: `${i*0.04}s`, height:'100%',
+                    transform: `scaleY(${liveTranscript ? h : 0.15})`, transition:'transform 0.2s' }} />
+                ))}
+              </div>
+            ) : <MicOff size={13} />,
+            active: micOn || triggered, color: triggered ? '#00d4ff' : '#00ff88' },
         ] as Array<{ show: boolean; onClick: () => void; title: string; icon: React.ReactNode; active: boolean; color: string }>)
           .filter(b => b.show)
           .map((btn, i) => (

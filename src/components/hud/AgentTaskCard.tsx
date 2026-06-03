@@ -66,36 +66,38 @@ interface Props {
 }
 
 export default function AgentTaskCard({ task, onDismiss, index }: Props) {
-  const [visible, setVisible] = useState(false)
-  const [exiting, setExiting] = useState(false)
+  const [phase, setPhase] = useState<'flicker' | 'visible' | 'scatter'>('flicker')
   const cfg = STATUS_CONFIG[task.status]
 
-  // Mount animation
+  // Mount: flicker in → lock solid
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 20 + index * 40)
-    return () => clearTimeout(t)
+    const t1 = setTimeout(() => setPhase('flicker'), 20 + index * 50)
+    const t2 = setTimeout(() => setPhase('visible'), 20 + index * 50 + 700)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [index])
 
   // Auto-dismiss 8s after complete
   useEffect(() => {
     if (task.status !== 'complete' && task.status !== 'error') return
     const t = setTimeout(() => {
-      setExiting(true)
-      setTimeout(() => onDismiss(task.id), 400)
+      setPhase('scatter')
+      setTimeout(() => onDismiss(task.id), 460)
     }, 8000)
     return () => clearTimeout(t)
   }, [task.status, task.id, onDismiss])
 
   const dismiss = () => {
-    setExiting(true)
-    setTimeout(() => onDismiss(task.id), 380)
+    setPhase('scatter')
+    setTimeout(() => onDismiss(task.id), 460)
   }
 
   const { color } = task
   const isActive = task.status === 'thinking' || task.status === 'working' || task.status === 'routing'
+  const animClass = phase === 'flicker' ? 'card-flicker' : phase === 'scatter' ? 'card-scatter' : ''
 
   return (
     <div
+      className={animClass}
       style={{
         position: 'relative',
         width: 200,
@@ -103,13 +105,9 @@ export default function AgentTaskCard({ task, onDismiss, index }: Props) {
         border: `1px solid ${color}${isActive ? '40' : '20'}`,
         backdropFilter: 'blur(8px)',
         flexShrink: 0,
-        opacity: exiting ? 0 : visible ? 1 : 0,
-        transform: exiting
-          ? 'translateY(-8px) scale(0.94)'
-          : visible ? 'translateY(0) scale(1)' : 'translateY(-12px) scale(0.92)',
-        transition: 'opacity 0.38s ease, transform 0.38s ease',
+        opacity: phase === 'flicker' || phase === 'visible' ? undefined : 0,
         cursor: 'pointer',
-        boxShadow: isActive ? `0 0 20px ${color}10, 0 0 40px ${color}06` : 'none',
+        boxShadow: isActive ? `0 0 24px ${color}15, 0 0 48px ${color}08` : 'none',
       }}
       onClick={dismiss}
     >

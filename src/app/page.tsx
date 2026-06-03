@@ -11,6 +11,8 @@ import AgentPanel from '@/components/hud/AgentPanel'
 import FloatingPanel from '@/components/hud/FloatingPanel'
 import AgentTaskCard from '@/components/hud/AgentTaskCard'
 import { useAgentTasks } from '@/lib/hooks/useAgentTasks'
+import { useJarvisState } from '@/lib/hooks/useJarvisState'
+import HexGrid from '@/components/hud/HexGrid'
 import type { Message, AgentName } from '@/lib/types'
 import type { PanelData } from '@/components/hud/FloatingPanel'
 
@@ -59,6 +61,9 @@ export default function HUD() {
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
   const { tasks, startTask, completeTask, errorTask, dismissTask } = useAgentTasks()
+  const [loading, setLoading] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const { orbState, markActive } = useJarvisState(loading, speaking)
   const [portfolio, setPortfolio] = useState<{ equity: number; dayPL: number; dayPLPct: number } | null>(null)
   const [nova, setNova] = useState<{ mrr: number; activeUsers: number; newSubs: number } | null>(null)
   const [vault, setVault] = useState<{ weeklyRevenue: number; monthlySales: number; totalSales: number } | null>(null)
@@ -201,6 +206,7 @@ export default function HUD() {
 
   return (
     <>
+      <HexGrid />
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; overflow: hidden; background: #010409; font-family: 'Courier New', monospace; color: white; }
@@ -292,7 +298,7 @@ export default function HUD() {
 
               {/* The orb — true center */}
               <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <JarvisOrb active={isActive} agentColor={agentColor} amplitude={amplitude} size={orbSize} />
+                <JarvisOrb active={isActive} agentColor={agentColor} amplitude={amplitude} size={orbSize} orbState={orbState} />
 
                 {/* Agent name */}
                 <div style={{ marginTop: 12, fontSize: 'clamp(12px,1.1vw,17px)', fontWeight: 700, letterSpacing: '0.6em', textTransform: 'uppercase', color: agentColor, textShadow: `0 0 30px ${agentColor}` }}>
@@ -406,12 +412,24 @@ export default function HUD() {
         </div>
 
         {/* ── Command bar ── */}
-        <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.15)', background: 'rgba(0,1,5,0.99)' }}>
+        {/* Command bar — HUD-framed */}
+        <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.15)', background: 'rgba(0,1,5,0.99)', position: 'relative' }}>
+          {/* Corner brackets on command bar */}
+          {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos,i) => (
+            <div key={i} style={{ position:'absolute', width:10, height:10, ...pos,
+              borderTop: i<2 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
+              borderBottom: i>=2 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
+              borderLeft: i%2===0 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
+              borderRight: i%2!==0 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
+              zIndex: 10, pointerEvents: 'none'
+            }} />
+          ))}
           <CommandInterface
             messages={messages}
-            onMessage={msg => setMessages(prev => [...prev, msg])}
-            onAgentChange={setActiveAgent}
-            onAmplitude={setAmplitude}
+            onMessage={msg => { setMessages(prev => [...prev, msg]); markActive() }}
+            onAgentChange={agent => { setActiveAgent(agent); markActive() }}
+            onAmplitude={amp => { setAmplitude(amp); if (amp > 0.05) setSpeaking(true); else setSpeaking(false) }}
+            onLoadingChange={setLoading}
             onTaskStart={startTask}
             onTaskComplete={completeTask}
             onTaskError={errorTask}

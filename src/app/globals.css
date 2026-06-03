@@ -286,3 +286,62 @@ body::after {
   transition: all 0.15s;
 }
 .send-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* ── Holographic UI Animations ────────────────────────────────────────────── */
+
+/* Panel scan-line materialize: horizontal sweep top→bottom */
+@keyframes scanReveal {
+  0%   { clip-path: inset(0 0 100% 0); opacity: 0.4; }
+  60%  { opacity: 1; }
+  100% { clip-path: inset(0 0 0% 0);   opacity: 1; }
+}
+.panel-materialize {
+  animation: scanReveal 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Agent card: 3-flash hologram flicker then lock solid */
+@keyframes hologramFlicker {
+  0%   { opacity: 0; }
+  12%  { opacity: 0.9; }
+  18%  { opacity: 0.1; }
+  32%  { opacity: 1; }
+  38%  { opacity: 0.2; }
+  55%  { opacity: 1; }
+  62%  { opacity: 0.4; }
+  78%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+.card-flicker { animation: hologramFlicker 0.7s ease forwards; }
+
+/* Agent card dismiss: pixel scatter / dissolve */
+@keyframes pixelScatter {
+  0%   { opacity: 1;   filter: blur(0px)  saturate(1);   transform: scale(1); }
+  40%  { opacity: 0.6; filter: blur(1px)  saturate(2);   transform: scale(1.03); }
+  100% { opacity: 0;   filter: blur(10px) saturate(0.2); transform: scale(1.08) translateY(-6px); }
+}
+.card-scatter { animation: pixelScatter 0.45s ease forwards; }
+
+/* Mic waveform bars */
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.15); }
+  50%       { transform: scaleY(1); }
+}
+
+/* Command bar pulse when streaming */
+@keyframes hudPulse {
+  0%, 100% { border-color: rgba(0,212,255,0.15); box-shadow: none; }
+  50%       { border-color: rgba(0,212,255,0.5);  box-shadow: 0 0 12px rgba(0,212,255,0.15); }
+}
+.hud-streaming { animation: hudPulse 0.8s ease-in-out infinite; }
+
+/* Generic dot pulse (mic indicator, etc.) */
+@keyframes voice-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* Scanner line sweep (for cards/panels) */
+@keyframes scan {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(400%); }
+}
