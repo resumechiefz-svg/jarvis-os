@@ -1,26 +1,32 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import type { StockQuote, NovaStats } from '@/lib/types'
 import type { PortfolioSummary } from '@/lib/agents/tradepilot'
 import LifeSection from './LifeSection'
 import PlaidSection from './PlaidSection'
 
-function Cell({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+const up = '#00ff88', dn = '#ff4455', dim = 'rgba(255,255,255,0.55)'
+
+function Row({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="border border-white/5 px-2 py-1 bg-white/[0.01] overflow-hidden">
-      <div className="text-[11px] text-white/30 tracking-wider uppercase mb-0.5 truncate">{label}</div>
-      <div className="text-[15px] font-mono font-bold leading-none truncate" style={{ color: color ?? '#cce8ff' }}>{value}</div>
-      {sub && <div className="text-[11px] text-white/20 mt-0.5 truncate">{sub}</div>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', gap: 6 }}>
+      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', textTransform: 'uppercase', flexShrink: 0 }}>{label}</span>
+      <div style={{ textAlign: 'right', minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: color ?? dim, whiteSpace: 'nowrap' }}>{value}</div>
+        {sub && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>{sub}</div>}
+      </div>
     </div>
   )
 }
 
-function SectionHead({ title, badge }: { title: string; badge?: string }) {
+function Section({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
   return (
-    <div className="col-span-2 flex items-center justify-between text-[11px] tracking-[0.2em] uppercase font-bold border-b border-cyan-900/30 pb-0.5 mb-1 mt-1 overflow-hidden">
-      <span className="text-cyan-500/50 truncate">{title}</span>
-      {badge && <span className="text-[10px] text-green-500/50 font-normal shrink-0 ml-1">{badge}</span>}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0,212,255,0.1)', paddingBottom: 3, marginBottom: 5 }}>
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,212,255,0.45)', textTransform: 'uppercase' }}>{title}</span>
+        {badge && <span style={{ fontSize: 7, color: '#00ff88', letterSpacing: '0.1em' }}>{badge}</span>}
+      </div>
+      {children}
     </div>
   )
 }
@@ -31,62 +37,49 @@ export default function LeftPanel() {
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null)
 
   useEffect(() => {
-    const loadFast = () => {
+    const fast = () => {
       fetch('/api/stocks').then(r => r.json()).then(d => Array.isArray(d) ? setStocks(d) : null).catch(() => {})
       fetch('/api/portfolio').then(r => r.json()).then(d => d?.equity !== undefined ? setPortfolio(d) : null).catch(() => {})
     }
-    const loadSlow = () => {
+    const slow = () => {
       fetch('/api/nova').then(r => r.json()).then(d => d?.mrr !== undefined ? setNova(d) : null).catch(() => {})
     }
-    loadFast(); loadSlow()
-    const fast = setInterval(loadFast, 60000)
-    const slow = setInterval(loadSlow, 15 * 60 * 1000)
-    return () => { clearInterval(fast); clearInterval(slow) }
+    fast(); slow()
+    const t1 = setInterval(fast, 60000)
+    const t2 = setInterval(slow, 15 * 60 * 1000)
+    return () => { clearInterval(t1); clearInterval(t2) }
   }, [])
 
-  const up = '#00ff88', dn = '#ff4455', nu = '#cce8ff'
   const chg = (v: number) => v >= 0 ? up : dn
 
   return (
-    <div className="left-panel h-full overflow-hidden px-2 py-2">
-      <div className="grid grid-cols-2 gap-1 h-full content-start">
+    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '10px 12px' }}>
 
-        {/* TradePilot */}
-        <SectionHead title="TradePilot" badge={portfolio ? (portfolio.isLive ? '● LIVE' : '● PAPER') : 'ALPACA'} />
-        {portfolio ? (
-          <>
-            <Cell label="Equity" value={`$${portfolio.equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} color={up} />
-            <Cell label="Day P&L" value={`${portfolio.dayPL >= 0 ? '+' : ''}$${portfolio.dayPL.toFixed(2)}`} sub={`${portfolio.dayPLPct >= 0 ? '+' : ''}${portfolio.dayPLPct.toFixed(2)}%`} color={portfolio.dayPL >= 0 ? up : dn} />
-            <Cell label="Cash" value={`$${portfolio.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} />
-            <Cell label="Positions" value={String(portfolio.positions.length)} sub={`${portfolio.openOrders} orders`} />
-          </>
-        ) : (
-          <><Cell label="Equity" value="—" /><Cell label="Day P&L" value="—" /></>
-        )}
+      <Section title="TradePilot" badge={portfolio ? (portfolio.isLive ? '● LIVE' : '● PAPER') : 'ALPACA'}>
+        <Row label="Equity" value={portfolio ? `$${portfolio.equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'} color={up} />
+        <Row label="Day P&L" value={portfolio ? `${portfolio.dayPL >= 0 ? '+' : ''}$${portfolio.dayPL.toFixed(2)}` : '—'} sub={portfolio ? `${portfolio.dayPLPct >= 0 ? '+' : ''}${portfolio.dayPLPct.toFixed(2)}%` : undefined} color={portfolio ? chg(portfolio.dayPL) : undefined} />
+        <Row label="Cash" value={portfolio ? `$${portfolio.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'} />
+        <Row label="Positions" value={portfolio ? String(portfolio.positions.length) : '—'} sub={portfolio ? `${portfolio.openOrders} orders` : undefined} />
+      </Section>
 
-        {/* Markets */}
-        <SectionHead title="Markets" badge="LIVE" />
-        {stocks.slice(0, 6).map(s => (
-          <Cell key={s.symbol} label={s.symbol} value={`$${s.price.toFixed(2)}`}
-            sub={`${s.change >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`} color={chg(s.change)} />
+      <Section title="Markets" badge="LIVE">
+        {stocks.length === 0 ? (
+          <Row label="Loading..." value="—" />
+        ) : stocks.slice(0, 8).map(s => (
+          <Row key={s.symbol} label={s.symbol} value={`$${s.price.toFixed(2)}`} sub={`${s.change >= 0 ? '+' : ''}${s.changePercent.toFixed(2)}%`} color={chg(s.change)} />
         ))}
+      </Section>
 
-        {/* ResumeChiefz */}
-        <SectionHead title="ResumeChiefz" badge="STRIPE" />
-        <Cell label="MRR" value={nova ? `$${nova.mrr.toFixed(0)}` : '—'} color={nova?.mrr ? up : nu} />
-        <Cell label="Users" value={nova ? String(nova.activeUsers) : '—'} />
-        <Cell label="New Subs" value={nova ? String(nova.newSubs) : '—'} sub="30d" color={nova?.newSubs ? up : nu} />
-        <Cell label="Churn" value={nova ? String(nova.churn) : '—'} sub="30d" color={nova?.churn ? dn : nu} />
-        <Cell label="Resumes" value={nova ? String(nova.resumesGenerated) : '—'} sub="30d" />
-        <Cell label="Conversion" value={nova && nova.activeUsers > 0 ? `${((nova.newSubs / Math.max(nova.activeUsers, 1)) * 100).toFixed(1)}%` : '—'} />
+      <Section title="ResumeChiefz" badge="STRIPE">
+        <Row label="MRR" value={nova ? `$${nova.mrr.toFixed(0)}` : '—'} color={nova?.mrr ? up : dim} />
+        <Row label="Users" value={nova ? String(nova.activeUsers) : '—'} />
+        <Row label="New Subs" value={nova ? String(nova.newSubs) : '—'} sub="30d" color={nova?.newSubs ? up : dim} />
+        <Row label="Churn" value={nova ? String(nova.churn) : '—'} sub="30d" color={nova?.churn ? dn : dim} />
+        <Row label="Resumes" value={nova ? String(nova.resumesGenerated) : '—'} sub="30d" />
+      </Section>
 
-        {/* Plaid — Net worth, accounts, spend */}
-        <PlaidSection />
-
-        {/* Life Dashboard — training, meals, todos, events */}
-        <LifeSection />
-
-      </div>
+      <PlaidSection />
+      <LifeSection />
     </div>
   )
 }

@@ -246,8 +246,8 @@ export default function HUD() {
                 {leftOpen ? 'CLOSE' : 'DATA'}
               </div>
             </div>
-            {/* Panel content */}
-            <div style={{ marginRight: 38, height: '100%', overflowY: 'auto', opacity: leftOpen ? 1 : 0, transition: 'opacity 0.2s' }}>
+            {/* Panel content — fixed width, doesn't shrink with toggle strip */}
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, right: 38, overflow: 'hidden', opacity: leftOpen ? 1 : 0, transition: 'opacity 0.25s', pointerEvents: leftOpen ? 'auto' : 'none' }}>
               <LeftPanel />
             </div>
           </div>
@@ -399,7 +399,7 @@ export default function HUD() {
                 {rightOpen ? 'CLOSE' : 'INTEL'}
               </div>
             </div>
-            <div style={{ marginLeft: 38, height: '100%', overflowY: 'auto', opacity: rightOpen ? 1 : 0, transition: 'opacity 0.2s' }}>
+            <div style={{ position: 'absolute', left: 38, top: 0, bottom: 0, right: 0, overflow: 'hidden', opacity: rightOpen ? 1 : 0, transition: 'opacity 0.25s', pointerEvents: rightOpen ? 'auto' : 'none' }}>
               <RightPanel activeAgent={activeAgent} mrr={mrr} />
             </div>
           </div>
