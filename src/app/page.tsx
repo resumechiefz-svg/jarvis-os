@@ -12,6 +12,7 @@ import { useAgentTasks } from '@/lib/hooks/useAgentTasks'
 const MiniAgentOrb = dynamic(() => import('@/components/orb/MiniAgentOrb'), { ssr: false })
 import { useJarvisState } from '@/lib/hooks/useJarvisState'
 import HexGrid from '@/components/hud/HexGrid'
+import Aurora from '@/components/ui/Aurora'
 import type { Message, AgentName } from '@/lib/types'
 import type { PanelData } from '@/components/hud/FloatingPanel'
 
@@ -257,6 +258,8 @@ export default function HUD() {
 
   return (
     <>
+      {/* Premium aurora nebula background — the signature visual */}
+      <Aurora />
       <HexGrid />
 
       {/* Info card overlay — weather, news, quick-pull data */}
@@ -278,10 +281,6 @@ export default function HUD() {
         />
       )}
       <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; overflow: hidden; background: #010409; font-family: 'Courier New', monospace; color: white; }
-        ::-webkit-scrollbar { width: 2px; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.12); }
         @keyframes voice-dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
         @keyframes tickerScroll { from{transform:translateX(0)} to{transform:translateX(-50%)} }
         @keyframes feedSlide { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
@@ -291,22 +290,40 @@ export default function HUD() {
 
       <VoiceInterrupt onMessage={msg => setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: msg, timestamp: new Date() }])} />
 
-      {/* Root — full viewport */}
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: 'radial-gradient(ellipse at 50% 35%, rgba(0,30,55,0.5) 0%, #010409 65%)' }}>
+      {/* Root — full viewport, z-index above aurora */}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
 
-        {/* ── Top bar: agent strip + ticker ── */}
-        <div style={{ flexShrink: 0, height: 'clamp(30px,3.2vh,40px)', display: 'flex', borderBottom: '1px solid rgba(0,212,255,0.08)', background: 'rgba(0,0,0,0.7)' }}>
+        {/* ── Top bar: premium glass agent strip ── */}
+        <div style={{
+          flexShrink: 0, height: 'clamp(36px,3.8vh,46px)',
+          display: 'flex', alignItems: 'center',
+          borderBottom: '1px solid rgba(0,212,255,0.07)',
+          background: 'rgba(0, 3, 12, 0.88)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          boxShadow: '0 1px 0 rgba(0,212,255,0.04), 0 4px 20px rgba(0,0,0,0.5)',
+        }}>
+          {/* Logo */}
+          <div style={{
+            padding: '0 20px',
+            borderRight: '1px solid rgba(0,212,255,0.06)',
+            height: '100%', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+          }}>
+            <div className="jarvis-logo">JARVIS<span className="os"> OS</span></div>
+          </div>
           <AgentBar activeAgent={activeAgent} />
         </div>
 
         {/* ── Main content row ── */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-          {/* Left slide panel */}
+          {/* Left slide panel — glass */}
           <div style={{
             width: leftOpen ? PANEL_W : 38, flexShrink: 0,
-            borderRight: '1px solid rgba(0,212,255,0.08)',
-            background: 'rgba(0,4,14,0.95)',
+            borderRight: '1px solid rgba(0,212,255,0.06)',
+            background: 'rgba(0,3,12,0.82)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
             overflow: 'hidden', position: 'relative', zIndex: 10,
           }}>
@@ -464,11 +481,13 @@ export default function HUD() {
             </div>
           </div>
 
-          {/* Right slide panel */}
+          {/* Right slide panel — glass */}
           <div style={{
             width: rightOpen ? PANEL_W : 38, flexShrink: 0,
-            borderLeft: '1px solid rgba(0,212,255,0.08)',
-            background: 'rgba(0,4,14,0.95)',
+            borderLeft: '1px solid rgba(0,212,255,0.06)',
+            background: 'rgba(0,3,12,0.82)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
             overflow: 'hidden', position: 'relative', zIndex: 10,
           }}>
@@ -489,9 +508,16 @@ export default function HUD() {
           </div>
         </div>
 
-        {/* ── Command bar ── */}
-        {/* Command bar — HUD-framed */}
-        <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.15)', background: 'rgba(0,1,5,0.99)', position: 'relative' }}>
+        {/* ── Command bar — premium glass ── */}
+        <div style={{
+          flexShrink: 0,
+          borderTop: '1px solid rgba(0,212,255,0.1)',
+          background: 'rgba(0, 2, 10, 0.94)',
+          backdropFilter: 'blur(30px)',
+          WebkitBackdropFilter: 'blur(30px)',
+          boxShadow: '0 -1px 0 rgba(0,212,255,0.04), 0 -20px 60px rgba(0,0,0,0.4)',
+          position: 'relative',
+        }}>
           {/* Corner brackets on command bar */}
           {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos,i) => (
             <div key={i} style={{ position:'absolute', width:10, height:10, ...pos,
