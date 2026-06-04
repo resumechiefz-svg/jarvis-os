@@ -21,9 +21,15 @@ import { slack } from '../slack'
 const execAsync = promisify(exec)
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const RC_DIR = path.join(process.env.HOME ?? '/Users/anthonyb23xx', 'Desktop/resumechiefz')
-const BLOG_DIR = path.join(RC_DIR, 'public/blog')
-const BLOG_INDEX = path.join(RC_DIR, 'public/blog.html')
+function getPaths() {
+  const home = process.env.HOME ?? '/Users/anthonyb23xx'
+  const RC_DIR = path.join(home, 'Desktop/resumechiefz')
+  return {
+    RC_DIR,
+    BLOG_DIR: path.join(RC_DIR, 'public/blog'),
+    BLOG_INDEX: path.join(RC_DIR, 'public/blog.html'),
+  }
+}
 
 // ── 1. Trending topics from Reddit ───────────────────────────────────────────
 async function getTrendingTopics(brand: 'rc' | 'cc'): Promise<string[]> {
@@ -84,14 +90,32 @@ Return JSON only:
 
   try {
     const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-    const match = text.match(/\{[\s\S]*\}/)
-    return match ? JSON.parse(match[0]) : { title: 'Draft post', slug: 'draft', content: text, excerpt: '', tag: 'GUIDE' }
+    // Strip markdown code fences if present
+    const stripped = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim()
+    // Find the outermost JSON object
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    if (start === -1 || end === -1) throw new Error('No JSON found')
+    const parsed = JSON.parse(stripped.slice(start, end + 1))
+    if (!parsed.title || !parsed.slug) throw new Error('Missing required fields')
+    return parsed
   } catch {
     return { title: 'Draft post', slug: 'draft', content: '', excerpt: '', tag: 'GUIDE' }
   }
 }
 
-// ── 3. Render full HTML using the site's exact template ───────────────────────
+// ── 3–6. Write, update index, git commit, deploy — via standalone script ─────
+// Runs outside Next.js bundling to avoid Turbopack module caching issues
+async function publishAndDeploy(post: { title: string; slug: string; excerpt: string; tag: string; content: string }): Promise<string> {
+  const scriptPath = path.join(process.cwd(), 'scripts/publish-blog.mjs')
+  const json = JSON.stringify(post).replace(/'/g, "\\'")
+  const { stdout, stderr } = await execAsync(`node "${scriptPath}" '${json}'`, { timeout: 120000 })
+  if (stderr && !stderr.includes('Deploy error')) throw new Error(stderr)
+  const result = JSON.parse(stdout.trim())
+  return result.liveUrl
+}
+
+// ── Legacy HTML renderer (kept for reference) ─────────────────────────────────
 function renderHTML(post: { title: string; excerpt: string; tag: string; content: string }, dateStr: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -154,17 +178,16 @@ function renderHTML(post: { title: string; excerpt: string; tag: string; content
 
 // ── 4+5. Write file and prepend card to blog index ────────────────────────────
 async function publishToSite(post: { title: string; slug: string; excerpt: string; tag: string; content: string }): Promise<string> {
+  const { BLOG_DIR, BLOG_INDEX } = getPaths()
   const today = new Date()
   const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  const dateSuffix = today.toISOString().slice(0, 10)  // 2026-06-03
+  const dateSuffix = today.toISOString().slice(0, 10)
   const filename = `${post.slug}-${dateSuffix}.html`
   const filepath = path.join(BLOG_DIR, filename)
   const url = `/blog/${filename}`
 
-  // Write the HTML file
   await fs.writeFile(filepath, renderHTML(post, dateStr), 'utf-8')
 
-  // Prepend new card to blog.html index (insert after <div class="blog-grid">)
   const indexHtml = await fs.readFile(BLOG_INDEX, 'utf-8')
   const newCard = `
             <!-- Auto-published ${dateSuffix} -->
@@ -192,6 +215,7 @@ async function publishToSite(post: { title: string; slug: string; excerpt: strin
 
 // ── 6. Git commit + Vercel deploy ─────────────────────────────────────────────
 async function deployToVercel(title: string, dateSuffix: string): Promise<string> {
+  const { RC_DIR } = getPaths()
   const { stdout } = await execAsync(
     `cd "${RC_DIR}" && \
      rm -f .git/index.lock .git/HEAD.lock 2>/dev/null; \
@@ -211,18 +235,13 @@ export async function runAutoBlog(brand: 'rc' | 'cc' = 'rc'): Promise<{ title: s
   const post = await writeBlogPost(brand, topics)
   const dateSuffix = new Date().toISOString().slice(0, 10)
 
-  // Write files to disk
-  const siteUrl = await publishToSite(post)
-  const liveUrl = `https://resumechiefz.com${siteUrl}`
-
-  // Deploy to Vercel
-  let deployedUrl = liveUrl
+  // Write file, update blog index, git commit, vercel deploy — via external script
+  let deployedUrl = `https://resumechiefz.com/blog/${post.slug}-${dateSuffix}.html`
   try {
-    await deployToVercel(post.title, dateSuffix)
-    deployedUrl = liveUrl
+    deployedUrl = await publishAndDeploy(post)
   } catch (err) {
-    deployedUrl = liveUrl + ' (deploy may still be processing)'
-    console.error('Vercel deploy error:', err)
+    console.error('Publish error:', err)
+    deployedUrl += ' (publish may still be processing)'
   }
 
   // Save to Supabase for memory
