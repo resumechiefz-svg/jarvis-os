@@ -313,14 +313,43 @@ async function generateImageReplicate(prompt: string, outputPath: string): Promi
   throw new Error('Replicate timed out')
 }
 
+// Cost tracker — logs every Imagen call so we can monitor spend
+async function trackImagenUsage(model: string, cost: number): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import('../supabase/client')
+    await supabaseAdmin.from('ai_memories').insert({
+      category: 'api_cost_imagen',
+      content: model,
+      context: JSON.stringify({ cost, timestamp: new Date().toISOString() }),
+      importance: 3,
+      created_at: new Date().toISOString(),
+    })
+    // Check monthly total — alert if over $7 (70% of $10 budget)
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
+    const { data } = await supabaseAdmin
+      .from('ai_memories')
+      .select('context')
+      .eq('category', 'api_cost_imagen')
+      .gte('created_at', monthStart.toISOString())
+    const monthlyTotal = (data ?? []).reduce((sum, r) => {
+      try { return sum + (JSON.parse(r.context).cost ?? 0) } catch { return sum }
+    }, 0)
+    if (monthlyTotal > 7) {
+      const { slack } = await import('../slack')
+      await slack(`⚠️ *Google Imagen spend: $${monthlyTotal.toFixed(2)} this month* — approaching $10 budget. Pipeline switching to Replicate only.`, 'echo')
+    }
+  } catch { /* non-fatal */ }
+}
+
 async function generateImageWithImagen(prompt: string, outputPath: string): Promise<void> {
   const apiKey = process.env.GOOGLE_IMAGEN_API_KEY ?? process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GOOGLE_IMAGEN_API_KEY not set')
 
+  // Use Fast model first — same quality for videos, ~40% cheaper ($0.02 vs $0.04/image)
   const models = [
-    'imagen-4.0-generate-001',
-    'imagen-3.0-generate-001',
-    'imagen-3.0-fast-generate-001',
+    'imagen-4.0-fast-generate-001',   // Fast: ~$0.02/image — use this first
+    'imagen-4.0-generate-001',         // Full: ~$0.04/image — fallback
+    'imagen-3.0-fast-generate-001',    // Older fast: fallback
   ]
 
   for (const model of models) {
@@ -334,6 +363,7 @@ async function generateImageWithImagen(prompt: string, outputPath: string): Prom
             instances: [{ prompt }],
             parameters: { sampleCount: 1, aspectRatio: '16:9', safetyFilterLevel: 'block_only_high' },
           }),
+          signal: AbortSignal.timeout(30000),
         }
       )
       if (!res.ok) continue
@@ -341,6 +371,9 @@ async function generateImageWithImagen(prompt: string, outputPath: string): Prom
       const b64 = data?.predictions?.[0]?.bytesBase64Encoded
       if (!b64) continue
       fs.writeFileSync(outputPath, Buffer.from(b64, 'base64'))
+      // Track cost: fast=$0.02, full=$0.04
+      const cost = model.includes('fast') ? 0.02 : 0.04
+      trackImagenUsage(model, cost).catch(() => {})
       return
     } catch { continue }
   }
@@ -357,10 +390,17 @@ export async function generateImages(pkg: VideoPackage): Promise<VideoPackage> {
     if (fs.existsSync(finalPath)) continue
 
     try {
-      // 1. Generate base image (character + scene, no text)
+      // 1. Generate base image
+      // Priority: Replicate (cheapest, pay-per-use) → Imagen Fast (fallback only)
+      // Imagen only used if Replicate fails — protects the $10 budget
+      let imageGenerated = false
       if (REPLICATE_KEY) {
-        await generateImageReplicate(scene.imagePrompt, rawPath)
-      } else {
+        try {
+          await generateImageReplicate(scene.imagePrompt, rawPath)
+          imageGenerated = true
+        } catch { /* fall through to Imagen */ }
+      }
+      if (!imageGenerated) {
         await generateImageWithImagen(scene.imagePrompt, rawPath)
       }
 
