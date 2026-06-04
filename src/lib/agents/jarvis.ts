@@ -456,6 +456,18 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   }
 
   // ── Voice-to-action: Full YouTube video pipeline ───────────
+  // ── Instagram carousel ─────────────────────────────────────────
+  if (/(make|create|generate|run) (an? )?(instagram |ig )?carousel|ig post|instagram post|instagram carousel/i.test(userMessage)) {
+    try {
+      const { runCarouselPipeline } = await import('./carousel')
+      const channel = /card|chiefz|hobby/i.test(userMessage) ? 'cardchiefz' as const : 'resumechiefz' as const
+      runCarouselPipeline(channel).catch(() => {})
+      return { agent: 'echo' as AgentName, message: `On it, sir. Picking a viral topic, writing the slides, generating images. Chrome will open with the finished carousel for your review — approve and it queues to Buffer automatically.` }
+    } catch (err) {
+      return { agent: 'echo' as AgentName, message: `Carousel failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+    }
+  }
+
   if (/(make|create|produce|generate|run) (a )?(full |complete )?(youtube )?video|full video pipeline|youtube pipeline/i.test(userMessage)) {
     try {
       const { runFullPipeline } = await import('./youtube-pipeline')

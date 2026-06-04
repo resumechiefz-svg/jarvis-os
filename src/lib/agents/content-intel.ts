@@ -124,11 +124,23 @@ export async function getContentContext(
     ...(blogTitles.status === 'fulfilled' ? blogTitles.value : []),
   ]
 
+  // Pull actual top performers from analytics (stored by /api/rc/analytics cron)
+  const perfCategory = isCards ? 'top_performers_cc' : 'top_performers_rc'
+  const { data: perfData } = await supabaseAdmin
+    .from('ai_memories')
+    .select('context')
+    .eq('category', perfCategory)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const storedTopPerformers: string[] = perfData?.[0]
+    ? (JSON.parse(perfData[0].context).videos ?? []).map((v: { title: string }) => v.title)
+    : published.slice(0, 10)
+
   return {
     publishedTitles: published.slice(0, 40),
     trendingTopics: trending.status === 'fulfilled' ? trending.value : [],
     bufferedPosts: buffered.status === 'fulfilled' ? buffered.value : [],
-    topPerformers: published.slice(0, 10), // most recent = style reference
+    topPerformers: storedTopPerformers, // actual best performers by view count
   }
 }
 
@@ -159,6 +171,9 @@ export async function pickFreshTopic(
       content: `You're the content strategist for ${brandContext}
 
 Content type: ${formatGuidance[contentType]}
+
+TOP PERFORMING videos on this channel (study the style, angle, and specificity of what works):
+${ctx.topPerformers.slice(0, 5).map(t => `- ${t}`).join('\n') || '(no data yet)'}
 
 ALREADY PUBLISHED (do NOT repeat these or anything similar):
 ${ctx.publishedTitles.slice(0, 20).map(t => `- ${t}`).join('\n') || '(none yet)'}

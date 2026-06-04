@@ -33,6 +33,8 @@
     { "path": "/api/cc-email",           "schedule": "0 10 * * 2"    },
     { "path": "/api/eod-debrief",        "schedule": "0 21 * * *"    },
     { "path": "/api/competitor-intel",   "schedule": "0 7 * * 1"     },
-    { "path": "/api/forge/scan",         "schedule": "0 6 * * 1"     }
+    { "path": "/api/forge/scan",         "schedule": "0 6 * * 1"     },
+    { "path": "/api/rc/analytics",       "schedule": "0 8 * * 1"     },
+    { "path": "/api/email-sequences",    "schedule": "0 10 * * *"    }
   ]
 }
