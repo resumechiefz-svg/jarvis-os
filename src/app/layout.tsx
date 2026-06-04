@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'JARVIS OS — AB Command Center',
-  description: 'Personal AI command center',
+  title: 'ASTRO — AB Command Center',
+  description: 'Personal AI operating system — AB private',
   icons: {
     icon: '/icons/icon-192.png',
     apple: '/icons/apple-touch-icon.png',

@@ -60,7 +60,7 @@ export default function HUD() {
   const [feedOpen, setFeedOpen] = useState(false)
   const [mrr, setMrr] = useState(0)
   const [orbSize, setOrbSize] = useState(380)
-  const [ticker, setTicker] = useState(['JARVIS OS ● ONLINE', 'TRADEPILOT ● ACTIVE', 'CARD CHIEFZ ● LIVE', 'RESUMECHIEFZ ● MONITORING'])
+  const [ticker, setTicker] = useState(['ASTRO ● ONLINE', 'TRADEPILOT ● ACTIVE', 'CARD CHIEFZ ● LIVE', 'RESUMECHIEFZ ● MONITORING'])
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
@@ -254,287 +254,310 @@ export default function HUD() {
 
   if (isMobile) return <MobileChat />
 
-  const PANEL_W = 260
+  // Computed values
+  const PANEL_W = 300
+  const orbSize = Math.min(Math.floor(Math.min(window.innerWidth * 0.42, window.innerHeight * 0.58)), 520)
+  const isSpeaking = amplitude > 0.05
+  const isProcessing = loading
+  const statusLabel = isSpeaking ? 'SPEAKING' : isProcessing ? 'PROCESSING' : 'STANDBY'
+
+  const AGENTS = [
+    { id: 'jarvis', label: 'J', color: '#00d4ff' }, { id: 'nova', label: 'N', color: '#00ff88' },
+    { id: 'sage', label: 'Sa', color: '#a855f7' }, { id: 'vault', label: 'V', color: '#c9a84c' },
+    { id: 'echo', label: 'E', color: '#ff6b35' }, { id: 'scout', label: 'Sc', color: '#22d3ee' },
+    { id: 'dex', label: 'D', color: '#64748b' }, { id: 'beacon', label: 'B', color: '#f472b6' },
+    { id: 'ledger', label: 'L', color: '#34d399' }, { id: 'atlas', label: 'At', color: '#818cf8' },
+    { id: 'lumen', label: 'Lu', color: '#fb923c' }, { id: 'reel', label: 'R', color: '#e879f9' },
+  ]
 
   return (
     <>
-      {/* Premium aurora nebula background — the signature visual */}
+      {/* Aurora — the living background */}
       <Aurora />
-      <HexGrid />
 
-      {/* Info card overlay — weather, news, quick-pull data */}
+      {/* Overlays */}
       {infoCard && <InfoCard type={infoCard} onClose={() => setInfoCard(null)} />}
-
-      {/* Dex computer control overlay — fullscreen when active */}
       {dexTask && (
-        <DexControlPanel
-          task={dexTask}
-          onAbortRef={dexAbortRef}
-          onDone={(summary) => {
-            setMessages(prev => [...prev, {
-              id: Date.now().toString(), role: 'assistant', agent: 'dex' as AgentName,
-              content: `Task complete: ${summary}`, timestamp: new Date(),
-            }])
-            setTimeout(() => setDexTask(null), 3000)
-          }}
-          onAbort={() => setDexTask(null)}
-        />
+        <DexControlPanel task={dexTask} onAbortRef={dexAbortRef}
+          onDone={summary => { setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', agent: 'dex' as AgentName, content: `Task complete: ${summary}`, timestamp: new Date() }]); setTimeout(() => setDexTask(null), 3000) }}
+          onAbort={() => setDexTask(null)} />
       )}
-      <style>{`
-        @keyframes voice-dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
-        @keyframes tickerScroll { from{transform:translateX(0)} to{transform:translateX(-50%)} }
-        @keyframes feedSlide { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes panelIn { from{opacity:0;transform:scale(0.9) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
-        @keyframes pulseRing { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(2.5);opacity:0} }
-      `}</style>
 
       <VoiceInterrupt onMessage={msg => setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', agent: 'jarvis', content: msg, timestamp: new Date() }])} />
 
-      {/* Root — full viewport, z-index above aurora */}
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+      <style>{`
+        @keyframes orb-breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.025)} }
+        @keyframes orb-active  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+        @keyframes ring-expand { 0%{transform:translate(-50%,-50%) scale(1);opacity:0.5} 100%{transform:translate(-50%,-50%) scale(1.8);opacity:0} }
+        @keyframes ring-expand2{ 0%{transform:translate(-50%,-50%) scale(1);opacity:0.3} 100%{transform:translate(-50%,-50%) scale(2.2);opacity:0} }
+        @keyframes slide-left  { from{transform:translateX(-100%)} to{transform:translateX(0)} }
+        @keyframes slide-right { from{transform:translateX(100%)} to{transform:translateX(0)} }
+        @keyframes fade-up     { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse-dot   { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(0.7)} }
+        @keyframes ticker-run  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+        @keyframes glow-pulse  { 0%,100%{opacity:0.4} 50%{opacity:1} }
+      `}</style>
 
-        {/* ── Top bar: premium glass agent strip ── */}
+      {/* ══════════════════════════════════════════════════════
+          ROOT — full viewport, layered above aurora
+      ══════════════════════════════════════════════════════ */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* ── TOP BAR — ultra minimal ─────────────────────── */}
         <div style={{
-          flexShrink: 0, height: 'clamp(36px,3.8vh,46px)',
-          display: 'flex', alignItems: 'center',
+          flexShrink: 0, height: 52,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 24px',
+          background: 'rgba(0,2,10,0.6)',
+          backdropFilter: 'blur(24px)',
           borderBottom: '1px solid rgba(0,212,255,0.07)',
-          background: 'rgba(0, 2, 10, 0.75)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          boxShadow: '0 1px 0 rgba(0,212,255,0.04), 0 4px 20px rgba(0,0,0,0.5)',
         }}>
-          {/* Logo */}
-          <div style={{
-            padding: '0 20px',
-            borderRight: '1px solid rgba(0,212,255,0.06)',
-            height: '100%', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-          }}>
-            <div className="jarvis-logo">JARVIS<span className="os"> OS</span></div>
+          {/* Logo — ASTRO is the personal system. Jarvis is the commercial product. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, fontWeight: 800, letterSpacing: '0.22em', color: 'white', textShadow: '0 0 24px rgba(201,168,76,0.7)' }}>
+              A<span style={{ color: '#c9a84c' }}>S</span>TRO
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '2px 7px',
+              background: 'rgba(201,168,76,0.08)',
+              border: '1px solid rgba(201,168,76,0.2)',
+              borderRadius: 3,
+            }}>
+              <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c9a84c', boxShadow: '0 0 6px #c9a84c', animation: 'pulse-dot 2.5s ease-in-out infinite' }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, letterSpacing: '0.2em', color: 'rgba(201,168,76,0.6)' }}>PERSONAL</span>
+            </div>
           </div>
-          <AgentBar activeAgent={activeAgent} />
+
+          {/* Agent constellation */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {AGENTS.map(agent => {
+              const isActive = activeAgent === agent.id
+              return (
+                <div key={agent.id} title={agent.id}
+                  style={{
+                    width: isActive ? 30 : 22, height: isActive ? 30 : 22,
+                    borderRadius: '50%',
+                    background: isActive ? `${agent.color}20` : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${isActive ? agent.color : 'rgba(255,255,255,0.08)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: isActive ? 9 : 7, fontWeight: 700,
+                    color: isActive ? agent.color : 'rgba(255,255,255,0.25)',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+                    boxShadow: isActive ? `0 0 12px ${agent.color}50, 0 0 24px ${agent.color}20` : 'none',
+                    animation: isActive ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+                  }}
+                >
+                  {agent.label}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Time + status */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.05em' }}>
+              {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'rgba(0,212,255,0.4)', letterSpacing: '0.2em' }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}
+            </div>
+          </div>
         </div>
 
-        {/* ── Main content row ── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+        {/* ── MAIN STAGE — full screen, orb centered ──────── */}
+        <div ref={centerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-          {/* Left slide panel — glass */}
+          {/* Deep radial glow that intensifies with activity */}
           <div style={{
-            width: leftOpen ? PANEL_W : 38, flexShrink: 0,
-            borderRight: '1px solid rgba(0,212,255,0.06)',
-            background: 'rgba(0,3,12,0.55)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
-            overflow: 'hidden', position: 'relative', zIndex: 10,
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: `${orbSize * 3}px`, height: `${orbSize * 3}px`,
+            borderRadius: '50%',
+            background: `radial-gradient(ellipse, ${agentColor}${isSpeaking ? '18' : isProcessing ? '10' : '08'} 0%, transparent 65%)`,
+            transition: 'background 0.6s ease, width 0.4s, height 0.4s',
+            pointerEvents: 'none',
+          }} />
+
+          {/* Pulse rings — animate when active */}
+          {(isSpeaking || isProcessing) && (<>
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%',
+              width: `${orbSize * 1.15}px`, height: `${orbSize * 1.15}px`,
+              borderRadius: '50%',
+              border: `1px solid ${agentColor}`,
+              animation: 'ring-expand 2.4s ease-out infinite',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%',
+              width: `${orbSize * 1.05}px`, height: `${orbSize * 1.05}px`,
+              borderRadius: '50%',
+              border: `1px solid ${agentColor}60`,
+              animation: 'ring-expand2 2.4s ease-out 0.8s infinite',
+              pointerEvents: 'none',
+            }} />
+          </>)}
+
+          {/* ── THE ORB — the presence ── */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -54%)',
+            animation: isSpeaking ? 'orb-active 1.2s ease-in-out infinite' : 'orb-breathe 4s ease-in-out infinite',
           }}>
-            {/* Toggle strip — single click toggles, double click hides with dissolve */}
-            <div
-              onClick={() => {
-                const now = Date.now()
-                if (now - leftTapRef.current < 350) { setLeftOpen(false) } // double-tap = hide
-                else { setLeftOpen(o => !o) }
-                leftTapRef.current = now
-              }}
-              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', zIndex: 11, background: leftOpen ? 'transparent' : 'rgba(0,4,14,0.55)' }}
-            >
-              {['◈', '◉', '▲', '◆'].map((icon, i) => (
-                <div key={i} style={{ fontSize: 11, color: 'rgba(0,212,255,0.25)', transition: 'color 0.2s' }}>{icon}</div>
-              ))}
-              <div style={{ fontSize: 8, color: 'rgba(0,212,255,0.2)', letterSpacing: '0.1em', marginTop: 4, writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                {leftOpen ? 'CLOSE' : 'DATA'}
-              </div>
+            <JarvisOrb active={isActive} agentColor={agentColor} amplitude={amplitude} size={orbSize} orbState={orbState} />
+          </div>
+
+          {/* Agent label + status — floats below orb */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: `translate(-50%, ${orbSize * 0.47}px)`,
+            textAlign: 'center', animation: 'fade-up 0.5s ease both',
+          }}>
+            <div style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: 'clamp(13px, 1.2vw, 18px)', fontWeight: 700,
+              letterSpacing: '0.5em', textTransform: 'uppercase',
+              color: agentColor,
+              textShadow: `0 0 30px ${agentColor}`,
+              marginBottom: 8,
+            }}>
+              {activeAgent}
             </div>
-            {/* Panel content — fixed width, doesn't shrink with toggle strip */}
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, right: 38, overflow: 'hidden', opacity: leftOpen ? 1 : 0, transition: 'opacity 0.25s', pointerEvents: leftOpen ? 'auto' : 'none' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '3px 10px',
+              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+              border: `1px solid ${agentColor}20`,
+              borderRadius: 100,
+            }}>
+              <div style={{
+                width: 5, height: 5, borderRadius: '50%',
+                background: isSpeaking ? '#a855f7' : isProcessing ? agentColor : `${agentColor}50`,
+                boxShadow: isSpeaking ? '0 0 8px #a855f7' : isProcessing ? `0 0 8px ${agentColor}` : 'none',
+                animation: (isSpeaking || isProcessing) ? 'pulse-dot 1s ease-in-out infinite' : 'none',
+              }} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.3)' }}>
+                {statusLabel}
+              </span>
+            </div>
+          </div>
+
+          {/* Agent task orbs */}
+          {tasks.length > 0 && (
+            <div style={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, zIndex: 20 }}>
+              {tasks.map(task => (
+                <div key={task.id}>
+                  <MiniAgentOrb agent={task.agent} color={task.color} status={task.status as 'thinking' | 'working' | 'complete' | 'error'} startedAt={task.startedAt} onDismiss={() => dismissTask(task.id)} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Floating data panels */}
+          {panels.map((panel, i) => <FloatingPanel key={panel.id} panel={panel} onDismiss={dismissPanel} index={i} />)}
+
+          {/* ── LEFT PANEL — slides in from left ── */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, bottom: 0,
+            width: leftOpen ? PANEL_W : 0,
+            background: 'rgba(0,3,14,0.7)',
+            backdropFilter: leftOpen ? 'blur(24px)' : 'none',
+            borderRight: leftOpen ? '1px solid rgba(0,212,255,0.08)' : 'none',
+            transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)',
+            overflow: 'hidden', zIndex: 30,
+          }}>
+            <div style={{ width: PANEL_W, height: '100%', overflow: 'hidden' }}>
               <LeftPanel />
             </div>
           </div>
 
-          {/* ── CENTER: Full Jarvis stage ── */}
-          <div ref={centerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          {/* Left panel toggle tab */}
+          <div onClick={() => setLeftOpen(o => !o)} style={{
+            position: 'absolute', left: leftOpen ? PANEL_W : 0, top: '50%', transform: 'translateY(-50%)',
+            width: 20, height: 60, zIndex: 31, cursor: 'pointer',
+            background: 'rgba(0,3,14,0.8)', borderRight: '1px solid rgba(0,212,255,0.1)',
+            borderTop: '1px solid rgba(0,212,255,0.08)', borderBottom: '1px solid rgba(0,212,255,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 8, color: 'rgba(0,212,255,0.3)', letterSpacing: '0.1em',
+            writingMode: 'vertical-rl', transition: 'left 0.4s cubic-bezier(0.16,1,0.3,1)',
+            borderRadius: '0 4px 4px 0',
+          }}>
+            {leftOpen ? '◀' : '▶'}
+          </div>
 
-            {/* HUD grid background */}
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'linear-gradient(rgba(0,212,255,0.016) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.016) 1px,transparent 1px)', backgroundSize: '52px 52px' }} />
-
-            {/* Ticker strip */}
-            <div style={{ flexShrink: 0, padding: '4px 16px', borderBottom: '1px solid rgba(0,212,255,0.05)', display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(0,0,0,0.4)', zIndex: 2 }}>
-              <div style={{ fontSize: 8, color: 'rgba(0,212,255,0.25)', letterSpacing: '0.2em', flexShrink: 0 }}>LIVE</div>
-              <Ticker items={ticker} />
-              {/* Panel shortcuts */}
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                {[
-                  { label: 'TRADE', fn: () => openPanel('portfolio'), color: '#00d4ff' },
-                  { label: 'RC', fn: () => openPanel('rc'), color: '#a855f7' },
-                  { label: 'CC', fn: () => openPanel('sales'), color: '#c9a84c' },
-                ].map(btn => (
-                  <button key={btn.label} onClick={btn.fn} style={{ fontSize: 8, letterSpacing: '0.1em', padding: '1px 7px', border: `1px solid ${btn.color}30`, background: 'transparent', color: `${btn.color}70`, cursor: 'pointer', borderRadius: 2, fontFamily: 'inherit', transition: 'all 0.2s' }}>
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ── Jarvis stage — fills all remaining height ── */}
-            <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-
-              {/* Deep radial glow behind orb */}
-              <div style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: orbSize * 2.4, height: orbSize * 2.4,
-                borderRadius: '50%',
-                background: `radial-gradient(ellipse, ${agentColor}06 0%, transparent 65%)`,
-                pointerEvents: 'none', zIndex: 0,
-                transition: 'background 0.5s',
-              }} />
-
-              {/* The orb — true center */}
-              <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <JarvisOrb active={isActive} agentColor={agentColor} amplitude={amplitude} size={orbSize} orbState={orbState} />
-
-                {/* Agent name */}
-                <div style={{ marginTop: 12, fontSize: 'clamp(12px,1.1vw,17px)', fontWeight: 700, letterSpacing: '0.6em', textTransform: 'uppercase', color: agentColor, textShadow: `0 0 30px ${agentColor}` }}>
-                  {activeAgent}
-                </div>
-
-                {/* Status */}
-                <div style={{ marginTop: 6, fontSize: 9, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: amplitude > 0.05 ? '#a855f7' : isActive ? agentColor : 'rgba(0,212,255,0.2)', display: 'inline-block', boxShadow: isActive ? `0 0 8px ${agentColor}` : 'none', animation: 'voice-dot-pulse 1.8s infinite' }} />
-                  {amplitude > 0.05 ? 'SPEAKING' : isActive ? 'PROCESSING' : 'STANDBY'}
-                </div>
-              </div>
-
-              {/* Floating data panels */}
-              {panels.map((panel, i) => (
-                <FloatingPanel key={panel.id} panel={panel} onDismiss={dismissPanel} index={i} />
-              ))}
-
-              {/* Agent task cards — appear when Jarvis routes to a sub-agent */}
-              {tasks.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: 12,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  display: 'flex',
-                  gap: 8,
-                  zIndex: 18,
-                  pointerEvents: 'none', // cards themselves have pointer events
-                }}>
-                  <style>{`
-                    @keyframes progressPulse {
-                      0%   { width: 15%; opacity: 0.6; }
-                      50%  { width: 75%; opacity: 1; }
-                      100% { width: 15%; opacity: 0.6; }
-                    }
-                  `}</style>
-                  {tasks.map((task) => (
-                    <div key={task.id} style={{ pointerEvents: 'auto' }}>
-                      <MiniAgentOrb
-                        agent={task.agent}
-                        color={task.color}
-                        status={task.status as 'thinking' | 'working' | 'complete' | 'error'}
-                        startedAt={task.startedAt}
-                        onDismiss={() => dismissTask(task.id)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Agent orbs float beside Jarvis — rendered via MiniAgentOrb in task row above */}
-            </div>
-
-            {/* ── Live feed strip — collapsible ── */}
-            <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.06)', background: 'rgba(0,0,0,0.45)', zIndex: 2, transition: 'max-height 0.3s ease', maxHeight: feedOpen ? '28%' : '28px', overflow: 'hidden' }}>
-              <div
-                onClick={() => setFeedOpen(o => !o)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', cursor: 'pointer', userSelect: 'none' }}
-              >
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#00ff88', boxShadow: '0 0 5px #00ff88', animation: 'voice-dot-pulse 2s infinite', flexShrink: 0 }} />
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.25em', color: 'rgba(0,212,255,0.4)' }}>LIVE INTELLIGENCE</span>
-                <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(0,212,255,0.08), transparent)' }} />
-                <span style={{ fontSize: 9, color: 'rgba(0,212,255,0.25)', transition: 'transform 0.3s', transform: feedOpen ? 'rotate(180deg)' : 'none' }}>▼</span>
-              </div>
-              <div style={{ overflowY: 'auto', maxHeight: 'calc(28vh - 28px)' }}>
-              {feed.length === 0 ? (
-                <div style={{ padding: 16, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.08)', letterSpacing: '0.15em' }}>AWAITING INTELLIGENCE FEED...</div>
-              ) : feed.map(item => {
-                const cfg = TYPE_CFG[item.type] ?? TYPE_CFG.news
-                const color = item.color ?? cfg.color
-                return (
-                  <div key={item.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px',
-                    borderBottom: '1px solid rgba(255,255,255,0.02)',
-                    background: freshIds.has(item.id) ? `${color}04` : 'transparent',
-                    animation: freshIds.has(item.id) ? 'feedSlide 0.2s ease' : 'none',
-                    transition: 'background 1.5s ease',
-                  }}>
-                    <span style={{ fontSize: 8, color, flexShrink: 0 }}>{cfg.icon}</span>
-                    <span style={{ flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.55)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{item.text}</span>
-                    {item.value && <span style={{ fontSize: 12, fontWeight: 700, color, fontFamily: 'monospace', flexShrink: 0 }}>{item.value}</span>}
-                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.15)', fontFamily: 'monospace', flexShrink: 0 }}>{new Date(item.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
-                  </div>
-                )
-              })}
-              </div>
+          {/* ── RIGHT PANEL — slides in from right ── */}
+          <div style={{
+            position: 'absolute', top: 0, right: 0, bottom: 0,
+            width: rightOpen ? PANEL_W : 0,
+            background: 'rgba(0,3,14,0.7)',
+            backdropFilter: rightOpen ? 'blur(24px)' : 'none',
+            borderLeft: rightOpen ? '1px solid rgba(0,212,255,0.08)' : 'none',
+            transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)',
+            overflow: 'hidden', zIndex: 30,
+          }}>
+            <div style={{ width: PANEL_W, height: '100%', overflow: 'hidden' }}>
+              <RightPanel activeAgent={activeAgent} mrr={mrr} />
             </div>
           </div>
 
-          {/* Right slide panel — glass */}
-          <div style={{
-            width: rightOpen ? PANEL_W : 38, flexShrink: 0,
-            borderLeft: '1px solid rgba(0,212,255,0.06)',
-            background: 'rgba(0,3,12,0.55)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
-            overflow: 'hidden', position: 'relative', zIndex: 10,
+          {/* Right panel toggle tab */}
+          <div onClick={() => setRightOpen(o => !o)} style={{
+            position: 'absolute', right: rightOpen ? PANEL_W : 0, top: '50%', transform: 'translateY(-50%)',
+            width: 20, height: 60, zIndex: 31, cursor: 'pointer',
+            background: 'rgba(0,3,14,0.8)', borderLeft: '1px solid rgba(0,212,255,0.1)',
+            borderTop: '1px solid rgba(0,212,255,0.08)', borderBottom: '1px solid rgba(0,212,255,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 8, color: 'rgba(0,212,255,0.3)',
+            writingMode: 'vertical-rl', transition: 'right 0.4s cubic-bezier(0.16,1,0.3,1)',
+            borderRadius: '4px 0 0 4px',
           }}>
-            <div
-              onClick={() => setRightOpen(o => !o)}
-              style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', zIndex: 11 }}
-            >
-              {['◈', '◆', '▲', '□'].map((icon, i) => (
-                <div key={i} style={{ fontSize: 11, color: 'rgba(0,212,255,0.25)' }}>{icon}</div>
-              ))}
-              <div style={{ fontSize: 8, color: 'rgba(0,212,255,0.2)', letterSpacing: '0.1em', marginTop: 4, writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                {rightOpen ? 'CLOSE' : 'INTEL'}
+            {rightOpen ? '▶' : '◀'}
+          </div>
+
+          {/* Live ticker — bottom of stage, very subtle */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 26,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+            borderTop: '1px solid rgba(0,212,255,0.04)',
+            overflow: 'hidden', display: 'flex', alignItems: 'center',
+          }}>
+            <div style={{ paddingLeft: 12, paddingRight: 8, fontSize: 8, color: 'rgba(0,212,255,0.3)', letterSpacing: '0.2em', flexShrink: 0, borderRight: '1px solid rgba(0,212,255,0.06)' }}>LIVE</div>
+            <div style={{ flex: 1, overflow: 'hidden', padding: '0 12px' }}>
+              <div style={{ display: 'inline-block', whiteSpace: 'nowrap', animation: 'ticker-run 55s linear infinite', fontSize: 9, color: 'rgba(255,255,255,0.22)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
+                {[...ticker, ...ticker].map((item, i) => <span key={i} style={{ marginRight: 48 }}><span style={{ color: 'rgba(0,212,255,0.2)', marginRight: 8 }}>◆</span>{item}</span>)}
               </div>
             </div>
-            <div style={{ position: 'absolute', left: 38, top: 0, bottom: 0, right: 0, overflow: 'hidden', opacity: rightOpen ? 1 : 0, transition: 'opacity 0.25s', pointerEvents: rightOpen ? 'auto' : 'none' }}>
-              <RightPanel activeAgent={activeAgent} mrr={mrr} />
+            {/* Quick panel triggers */}
+            <div style={{ display: 'flex', gap: 6, padding: '0 12px', flexShrink: 0 }}>
+              {[{l:'TRADE',fn:()=>openPanel('portfolio'),c:'#00d4ff'},{l:'RC',fn:()=>openPanel('rc'),c:'#a855f7'},{l:'CC',fn:()=>openPanel('sales'),c:'#c9a84c'}].map(b => (
+                <button key={b.l} onClick={b.fn} style={{ fontSize: 8, letterSpacing: '0.12em', padding: '2px 8px', border: `1px solid ${b.c}25`, background: 'transparent', color: `${b.c}60`, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s', borderRadius: 2 }}>
+                  {b.l}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* ── Command bar — premium glass ── */}
+        {/* ── COMMAND BAR — the single line at the bottom ─ */}
         <div style={{
           flexShrink: 0,
-          borderTop: '1px solid rgba(0,212,255,0.1)',
-          background: 'rgba(0, 2, 10, 0.85)',
+          background: 'rgba(0,1,8,0.88)',
           backdropFilter: 'blur(30px)',
-          WebkitBackdropFilter: 'blur(30px)',
-          boxShadow: '0 -1px 0 rgba(0,212,255,0.04), 0 -20px 60px rgba(0,0,0,0.4)',
-          position: 'relative',
+          borderTop: '1px solid rgba(0,212,255,0.08)',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
         }}>
-          {/* Corner brackets on command bar */}
-          {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos,i) => (
-            <div key={i} style={{ position:'absolute', width:10, height:10, ...pos,
-              borderTop: i<2 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
-              borderBottom: i>=2 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
-              borderLeft: i%2===0 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
-              borderRight: i%2!==0 ? '1.5px solid rgba(0,212,255,0.4)' : 'none',
-              zIndex: 10, pointerEvents: 'none'
-            }} />
-          ))}
+          {/* Top accent line — glows with agent color */}
+          <div style={{
+            height: 1,
+            background: `linear-gradient(90deg, transparent, ${agentColor}60, transparent)`,
+            animation: 'glow-pulse 3s ease-in-out infinite',
+          }} />
           <CommandInterface
             messages={messages}
-            onMessage={msg => {
-              setMessages(prev => [...prev, msg])
-              markActive()
-              if (msg.card) setInfoCard(msg.card)
-            }}
+            onMessage={msg => { setMessages(prev => [...prev, msg]); markActive(); if (msg.card) setInfoCard(msg.card) }}
             onAgentChange={agent => { setActiveAgent(agent); markActive() }}
             onAmplitude={amp => { setAmplitude(amp); if (amp > 0.05) setSpeaking(true); else setSpeaking(false) }}
             onLoadingChange={setLoading}
