@@ -34,6 +34,9 @@ const PUBLIC_ROUTES = [
   '/review',            // Content review screen — public so it can be opened directly
   '/api/review',        // Review API endpoints
   '/api/video',         // Video file streaming for review screen
+  '/onboard',           // Onboarding flow — public for new customers
+  '/api/onboard',       // Onboarding save endpoint
+  '/api/content/upload', // Content upload pipeline
 ]
 
 // Security headers applied to every response

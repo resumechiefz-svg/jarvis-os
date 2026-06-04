@@ -32,39 +32,77 @@ export default function JarvisGreeting({ onSuggestionClick }: Props) {
         // 1. Get predictive suggestions (non-blocking)
         fetch('/api/predictive').then(r => r.json()).then(d => setSuggestions(d.suggestions ?? [])).catch(() => {})
 
-        // 2. Check what's genuinely new since last greeting
+        // 2. Check timing and morning brief status
         const lastGreeting = sessionStorage.getItem('jarvis_last_greeting')
         const lastGreetingTime = sessionStorage.getItem('jarvis_last_greeting_time')
+        const lastMorningBriefDate = sessionStorage.getItem('jarvis_morning_brief_date')
         const minutesSinceLast = lastGreetingTime
           ? Math.floor((Date.now() - parseInt(lastGreetingTime)) / 60000)
           : 9999
 
-        // Ask Jarvis to be human and contextual — not a robot report
-        const prompt = minutesSinceLast < 30
-          ? `AB just came back. Last time you said: "${lastGreeting ?? 'nothing'}". That was ${minutesSinceLast} minutes ago. Give a ONE sentence natural acknowledgment — vary it, be human, don't repeat yourself. Only mention something if it genuinely changed. Examples: "Back already?" or "Welcome back." or just nothing notable. Max 10 words. No portfolio recaps unless something actually changed significantly.`
-          : `AB just opened Jarvis. Time: ${getTimeOfDay()}. Give a ONE sentence warm, human, varied greeting. Do NOT give a stock/portfolio update unless there's something urgent (>2% move). Do NOT be robotic or repeat a template. Be natural — like a trusted colleague who knows him well. Examples: "Good to see you, AB." or "What are we working on?" or "Morning — anything urgent?" Max 12 words. Vary it every time.`
+        const hour = new Date().getHours()
+        const todayDate = new Date().toDateString()
+        const isMorning = hour >= 5 && hour < 11
+        const morningBriefDoneToday = lastMorningBriefDate === todayDate
 
-        const briefRes = await fetch('/api/jarvis', {
+        // 3. MORNING BRIEF — auto-plays if it's morning and hasn't fired today
+        if (isMorning && !morningBriefDoneToday && minutesSinceLast > 60) {
+          sessionStorage.setItem('jarvis_morning_brief_date', todayDate)
+
+          const briefRes = await fetch('/api/morning-brief')
+          const briefData = await briefRes.json() as {
+            greeting?: string; portfolio?: string; news?: string[]
+            rc?: string; cards?: string; training?: string; topPriority?: string
+          }
+
+          // Spoken brief — conversational, hits the essentials, under 90 seconds
+          const parts = [
+            briefData.greeting ?? `Good morning.`,
+            briefData.portfolio,
+            briefData.rc,
+            briefData.cards,
+            briefData.news?.[0] ? `Top story: ${briefData.news[0]}` : null,
+            briefData.topPriority ? `Today's focus: ${briefData.topPriority}` : null,
+          ].filter(Boolean)
+
+          const spoken = parts.join(' ')
+          if (spoken.length > 10) {
+            // Speak the full morning brief via ElevenLabs
+            fetch('/api/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: spoken, agent: 'jarvis', autoPlay: true }),
+            }).catch(() => {})
+          }
+
+          sessionStorage.setItem('jarvis_last_greeting', spoken.slice(0, 100))
+          sessionStorage.setItem('jarvis_last_greeting_time', Date.now().toString())
+          setGreeted(true)
+          return
+        }
+
+        // 4. Regular greeting for non-morning opens
+        const prompt = minutesSinceLast < 30
+          ? `AB just came back. Last said: "${lastGreeting ?? 'nothing'}". ${minutesSinceLast}min ago. ONE natural sentence. Max 10 words.`
+          : `AB opened Jarvis. ${getTimeOfDay()}. ONE warm, varied, human greeting. Not robotic. Max 12 words.`
+
+        const res = await fetch('/api/jarvis', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: prompt, history: [] }),
         })
-        const briefData = await briefRes.json()
-        const greetingText = (briefData.message ?? '').split('.')[0].trim()
-
+        const data = await res.json() as { message?: string }
+        const greetingText = (data.message ?? '').split('.')[0].trim()
         if (!greetingText || greetingText.length < 3) return
 
-        // Save so next greeting knows what was said
         sessionStorage.setItem('jarvis_last_greeting', greetingText)
         sessionStorage.setItem('jarvis_last_greeting_time', Date.now().toString())
-
-        // Greeting shows as text only — Jarvis speaks when you talk to him, not on page load
         setGreeted(true)
       } catch { /* silent fail */ }
     }
 
-    // Small delay so UI loads first
-    setTimeout(greetAndBrief, 1500)
+    // 2s delay so UI loads first, then Jarvis speaks
+    setTimeout(greetAndBrief, 2000)
   }, [])
 
   if (suggestions.length === 0) return null
