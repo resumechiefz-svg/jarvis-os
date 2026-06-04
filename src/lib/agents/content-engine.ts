@@ -49,8 +49,17 @@ const EBOOK_TOPICS = {
 }
 
 export async function generateYouTubeScript(channel: 'cardchiefz' | 'resumechiefz', topic?: string): Promise<{ title: string; script: string; description: string; tags: string[] }> {
-  const topics = YOUTUBE_TOPICS[channel]
-  const selectedTopic = topic ?? topics[Math.floor(Math.random() * topics.length)]
+  // Use content intelligence to pick a fresh, non-repetitive, viral topic
+  let selectedTopic = topic
+  if (!selectedTopic) {
+    try {
+      const { pickFreshTopic } = await import('./content-intel')
+      selectedTopic = await pickFreshTopic(channel, 'youtube')
+    } catch {
+      const topics = YOUTUBE_TOPICS[channel]
+      selectedTopic = topics[Math.floor(Math.random() * topics.length)]
+    }
+  }
 
   const channelVoice = channel === 'cardchiefz'
     ? 'Real card collector and eBay seller. Casual, knowledgeable, community-native. Sounds like the most trusted person at the card show.'
@@ -61,36 +70,41 @@ export async function generateYouTubeScript(channel: 'cardchiefz' | 'resumechief
     max_tokens: 1500,
     messages: [{
       role: 'user',
-      content: `Write a faceless YouTube script. Channel: ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}.
+      content: `Write a faceless YouTube script for ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}.
 
-Author voice: ${channelVoice}
+VOICE: ${channelVoice}
 
-Topic to consider (use it or pick something better that people are actually searching right now): "${selectedTopic}"
+TOPIC: "${selectedTopic}"
 
-FORMAT: Faceless narration — voice over text/visuals. No on-camera host.
-LENGTH: 5-7 minutes spoken (750-900 words).
+━━━ VIRAL CONTENT RULES (non-negotiable) ━━━
 
-VOICE — the whole game:
-Sound like the most knowledgeable person in the room who doesn't need to prove it. Casual. Confident. A little direct. Like someone who's lived this, not someone who researched it for an afternoon. If something is counterintuitive say it like it's counterintuitive. If something is obvious to experts but news to beginners, explain it like you're letting them in on something.
+HOOK (first 15 seconds — make or break):
+- Open mid-thought. Drop them into the most interesting moment.
+- The viewer should feel like they almost scrolled past something they needed.
+- Pattern interrupt: a number, a counterintuitive claim, a specific result, or a mystery.
+- NEVER: "In this video...", "Hey guys...", "Today we're going to..."
 
-WHAT WORKS:
-- Open with the thing they're already thinking about, not an intro about the video
-- Make the first 15 seconds undeniable — they have to keep watching
-- Give them something real every 90 seconds
-- End with one action, not a summary
+STRUCTURE that retains viewers:
+- Tease the payoff in the first 20 seconds, deliver it in the last 30
+- New insight or example every 60-90 seconds — no dead air
+- Pattern: claim → proof/example → so what → next claim
+- Use "here's the thing most people get wrong about X" transitions
 
-WHAT DOESN'T:
-- "In this video I'm going to show you..."
-- "Don't forget to like and subscribe"
-- Fake energy
-- Made-up stats or vague claims
-- Padding to hit a time target
+CONTENT PHILOSOPHY:
+- Be genuinely useful. If a viewer screenshots this or shares it, that's the goal.
+- Specific beats vague. "47% of resumes" beats "many resumes". Real examples beat theory.
+- If it's counterintuitive, say it like a secret. If it's obvious to pros, say it like insider info.
+- NEVER sell the product. Never mention the channel. Just teach.
 
-Return JSON: {
-  "title": "best SEO title you can write — keyword in first 3 words",
-  "script": "full script — write the whole thing",
-  "description": "YouTube description, 150 words, keyword-rich, first line is a hook",
-  "tags": ["10 relevant tags"]
+FORMAT: Faceless — voice over text/visuals. 5-7 min (750-900 words).
+
+Return JSON only:
+{
+  "title": "SEO-optimized, keyword-first, curiosity hook — under 60 chars",
+  "script": "complete word-for-word script",
+  "description": "YouTube description — first sentence is a hook, 150 words, keyword-rich, ends with call to action",
+  "tags": ["10 specific searchable tags"],
+  "hook": "first 2 sentences only — the make-or-break opener"
 }`,
     }],
   })
@@ -251,13 +265,34 @@ export async function runContentPipeline(channel: 'cardchiefz' | 'resumechiefz',
 _React ✅ to approve for recording, or reply with edits_`)
     }
 
-    await supabaseAdmin.from('ai_memories').insert({
-      category: 'youtube_script',
+    // Save draft to Supabase
+    const { data: draft } = await supabaseAdmin.from('ai_memories').insert({
+      category: 'youtube_draft',
       content: script.title,
-      context: JSON.stringify({ channel, ...script }),
+      context: JSON.stringify({ channel, ...script, status: 'pending' }),
       importance: 7,
       created_at: new Date().toISOString(),
-    })
+    }).select('id').single()
+
+    const draftId = draft?.id ?? ''
+    const reviewUrl = `http://localhost:3001/review/youtube/${draftId}`
+    const mobileUrl = `https://jarvis-os-dusky.vercel.app/review/youtube/${draftId}`
+
+    // Slack notification with review links
+    await slack(`🎬 *YouTube Script Ready — ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}*
+
+*Title:* ${script.title}
+*Length:* ~${Math.round(script.script.split(' ').length / 130)} min
+
+Review the script and approve to post:
+• Mac: ${reviewUrl}
+• Mobile: ${mobileUrl}`)
+
+    // Auto-open review screen on Mac (only when running locally)
+    if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+      const { exec } = await import('child_process')
+      exec(`open -a "Google Chrome" "${reviewUrl}"`)
+    }
   }
 
   if (type === 'ebook') {

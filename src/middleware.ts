@@ -28,6 +28,8 @@ const PUBLIC_ROUTES = [
   '/api/watch',        // internally checks x-watch-key
   '/api/strava/health', // internally checks x-health-key
   '/api/webhooks/slack', // Slack events — verified by signing secret internally
+  '/review',            // Content review screen — public so it can be opened directly
+  '/api/review',        // Review API endpoints
 ]
 
 // Security headers applied to every response

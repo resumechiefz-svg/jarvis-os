@@ -51,9 +51,17 @@ async function getTrendingTopics(brand: 'rc' | 'cc'): Promise<string[]> {
 }
 
 // ── 2. Claude writes the post ─────────────────────────────────────────────────
-async function writeBlogPost(brand: 'rc' | 'cc', topics: string[]): Promise<{
+async function writeBlogPost(brand: 'rc' | 'cc', trendingTopics: string[]): Promise<{
   title: string; slug: string; content: string; excerpt: string; tag: string
 }> {
+  // Get a fresh topic from content intelligence
+  const channel = brand === 'rc' ? 'resumechiefz' : 'cardchiefz' as const
+  let freshTopic = ''
+  try {
+    const { pickFreshTopic } = await import('./content-intel')
+    freshTopic = await pickFreshTopic(channel, 'blog')
+  } catch { /* fall through to Reddit topics */ }
+
   const brandCtx = brand === 'rc'
     ? 'ResumeChiefz — AI resume builder built by a 10-year recruiter. Target: job seekers who want a competitive edge.'
     : 'Card Chiefz — premium sports card eBay store. 1,400+ sales, 99.5% feedback. Target: collectors and investors.'
@@ -65,17 +73,23 @@ async function writeBlogPost(brand: 'rc' | 'cc', topics: string[]): Promise<{
       role: 'user',
       content: `Write a blog post for ${brandCtx}
 
-Trending topics for inspiration:
-${topics.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+${freshTopic ? `RECOMMENDED TOPIC (use this unless you find a clearly better angle): "${freshTopic}"` : ''}
 
-Pick the most SEO-valuable angle. Write a complete blog post:
-- Title: specific, SEO-optimized, curiosity-driving (no clickbait)
-- Excerpt: 1-2 sentences that hook the reader
-- Tag: one of: MARKET, GUIDE, TIPS, GRADING, STRATEGY, CAREER
-- Slug: url-friendly, no date (date is appended automatically)
-- Content: 600-800 words of HTML (use <h2>, <p>, <ul><li>, <strong> — no <html>/<head>/<body> tags)
-  - Genuinely valuable, practical, specific
-  - End with a soft CTA paragraph linking to ${brand === 'rc' ? '/app.html' : 'https://www.ebay.com/str/cardchiefz'}
+Trending community topics for inspiration:
+${trendingTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+CONTENT RULES:
+- Genuinely helpful. The kind of post someone bookmarks and shares, not just reads.
+- Specific, not vague. Real examples, real numbers, real situations.
+- NOT promotional. The brand is mentioned softly at the end only.
+- Title: SEO-optimized, curiosity-driving, keyword-first. No clickbait.
+- Excerpt: 1-2 sentences that make someone click from a search result.
+
+Write:
+- Tag: one of: GUIDE, TIPS, STRATEGY, CAREER, MARKET, GRADING
+- Slug: url-friendly, no date
+- Content: 600-800 words HTML (use <h2>, <p>, <ul><li>, <strong> — no outer html/head/body tags)
+- End with a single soft CTA paragraph linking to ${brand === 'rc' ? '/app.html' : 'https://www.ebay.com/str/cardchiefz'}
 
 Return JSON only:
 {
