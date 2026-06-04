@@ -390,8 +390,8 @@ export async function generateImages(pkg: VideoPackage): Promise<VideoPackage> {
     if (fs.existsSync(finalPath)) continue
 
     try {
-      // 1. Generate base image — Imagen 4 Fast first (Google native, best quality)
-      // Replicate only if Imagen fails
+      // 1. Generate base image — Imagen 4 Fast (Google $10 credit, ~$0.02/image)
+      // Replicate Flux fallback if Imagen fails
       let imageGenerated = false
       try {
         await generateImageWithImagen(scene.imagePrompt, rawPath)
@@ -650,17 +650,17 @@ export async function animateScenes(pkg: VideoPackage): Promise<VideoPackage> {
     if (!fs.existsSync(imgPath) || fs.existsSync(clipPath)) continue
 
     try {
-      // Veo 2 first (Google native, best quality) → Replicate fallback → Runway last resort
-      if (googleKey) {
+      // Replicate Wan2.1 first (~$0.08/clip, workhorse) → Veo 2 fallback → Runway last
+      if (REPLICATE_KEY) {
         try {
-          await animateSceneVeo2(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
+          await animateSceneReplicate(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
           continue
         } catch (err) {
-          console.error(`[Veo 2] Scene ${scene.id} failed, trying Replicate:`, err)
+          console.error(`[Replicate] Scene ${scene.id} failed, trying Veo 2:`, err)
         }
       }
-      if (REPLICATE_KEY) {
-        await animateSceneReplicate(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
+      if (googleKey) {
+        await animateSceneVeo2(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
       } else if (RUNWAY_KEY) {
         // Runway fallback
         const imgBase64 = fs.readFileSync(imgPath).toString('base64')
