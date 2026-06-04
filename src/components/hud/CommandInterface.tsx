@@ -230,11 +230,26 @@ export default function CommandInterface({
 
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
-          // Accumulate confirmed words
           accumulatedRef.current += ' ' + e.results[i][0].transcript
         } else {
           interim = e.results[i][0].transcript
         }
+      }
+
+      // ── Wake word: "Jarvis" or "Hey Jarvis" ─────────────────────────────
+      // Detects the trigger even mid-sentence, strips it, sends the rest as command
+      const fullText = (accumulatedRef.current + ' ' + interim).trim().toLowerCase()
+      const wakeMatch = fullText.match(/(?:hey\s+)?(?:jarvis|jervis|travis|davis)[,\s]+(.+)/i)
+      if (wakeMatch && wakeMatch[1]?.trim().length > 2) {
+        // Extract the command after "Jarvis"
+        const command = wakeMatch[1].trim()
+        accumulatedRef.current = command
+        // Flash the input so AB knows it was heard
+        setLiveTranscript(`[Jarvis heard] ${command}`)
+        // Send immediately — don't wait for silence
+        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current)
+        pauseTimerRef.current = setTimeout(() => flushSpeech(), 400)
+        return
       }
 
       // Show live transcript in input box
