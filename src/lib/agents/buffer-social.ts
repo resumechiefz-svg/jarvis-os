@@ -65,27 +65,43 @@ Return JSON:
   }
 }
 
-// ── Post to Buffer via REST API ───────────────────────────────────────────────
+// ── Post to Buffer via GraphQL API (accepts OAuth S_ tokens) ─────────────────
 async function postToBuffer(channelId: string, text: string, platform: string): Promise<PostResult> {
   if (!BUFFER_TOKEN) return { platform, success: false, error: 'No BUFFER_API_TOKEN' }
 
   try {
-    const res = await fetch(`${BUFFER_API}/updates/create.json`, {
+    const res = await fetch('https://api.buffer.com', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        access_token: BUFFER_TOKEN,
-        profile_ids: channelId,
-        text,
-        shorten: 'false',
-        now: 'false',  // add to queue, don't post immediately
+      headers: {
+        'Authorization': `Bearer ${BUFFER_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: `mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) {
+            ... on PostActionSuccess { post { id status } }
+            ... on MutationError { message }
+          }
+        }`,
+        variables: {
+          input: {
+            channelId,
+            text,
+            schedulingType: 'automatic',
+            mode: 'addToQueue',
+            assets: [],
+          },
+        },
       }),
     })
-    const data = await res.json() as { success?: boolean; updates?: Array<{ id: string }>; error?: string }
-    if (data.success && data.updates?.[0]?.id) {
-      return { platform, success: true, id: data.updates[0].id }
+    const data = await res.json() as {
+      data?: { createPost?: { post?: { id: string; status?: string }; message?: string } }
+      errors?: Array<{ message: string }>
     }
-    return { platform, success: false, error: data.error ?? 'Unknown error' }
+    const cp = data.data?.createPost
+    if (cp?.post?.id) return { platform, success: true, id: cp.post.id }
+    const errMsg = cp?.message ?? data.errors?.[0]?.message ?? 'Unknown error'
+    return { platform, success: false, error: errMsg }
   } catch (err) {
     return { platform, success: false, error: err instanceof Error ? err.message : 'Network error' }
   }
