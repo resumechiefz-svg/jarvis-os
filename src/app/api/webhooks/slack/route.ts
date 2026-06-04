@@ -36,12 +36,6 @@ function extractDraftId(text: string): string | null {
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
-
-  // Verify signature
-  if (SIGNING_SECRET && !verifySlack(req, body)) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-  }
-
   const payload = JSON.parse(body) as {
     type: string
     challenge?: string
@@ -53,9 +47,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Slack URL verification challenge
+  // Slack URL verification challenge — respond immediately, no signature check needed
   if (payload.type === 'url_verification') {
     return NextResponse.json({ challenge: payload.challenge })
+  }
+
+  // Verify signature for all other events
+  if (SIGNING_SECRET && !verifySlack(req, body)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   const event = payload.event
