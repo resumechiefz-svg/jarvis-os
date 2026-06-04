@@ -2,13 +2,14 @@
  * Jarvis Package Tier System
  * Controls feature access for Solo / Business / Enterprise customers
  *
- * AB's Astro = internal flag, bypasses all limits — the god tier
  * Solo = $99-149/mo — core agents, 5 tool integrations, content engine
  * Business = $299-499/mo — all agents, unlimited integrations, FP&A, voice clone
  * Enterprise = $999+/mo — white-label, custom agents, dedicated support, SLA
+ *
+ * Note: 'internal' tier is for system use only. Never expose to customers.
  */
 
-export type Tier = 'astro' | 'enterprise' | 'business' | 'solo' | 'free'
+export type Tier = 'internal' | 'enterprise' | 'business' | 'solo' | 'free'
 
 export interface TierFeatures {
   // Content
@@ -39,7 +40,7 @@ export interface TierFeatures {
 }
 
 export const TIER_FEATURES: Record<Tier, TierFeatures> = {
-  astro: {
+  internal: {
     // No limits. The god tier. AB's personal system.
     contentEngine: true, videoUpload: true, voiceClone: true,
     carousels: true, youtubeAutomation: true,
@@ -92,7 +93,7 @@ export const TIER_FEATURES: Record<Tier, TierFeatures> = {
   },
 }
 
-export const TIER_PRICING: Record<Exclude<Tier, 'astro'>, { monthly: number | null; label: string; tagline: string }> = {
+export const TIER_PRICING: Record<Exclude<Tier, 'internal'>, { monthly: number | null; label: string; tagline: string }> = {
   free: { monthly: 0, label: 'Free', tagline: 'See what it can do' },
   solo: { monthly: 99, label: 'Solo', tagline: 'For the one-person operator' },
   business: { monthly: 299, label: 'Business', tagline: 'For operators with traction' },
@@ -112,7 +113,7 @@ export function hasFeature(tier: Tier, feature: keyof TierFeatures): boolean {
 export function getTierFromProfile(profile?: { plan?: string } | null): Tier {
   if (!profile?.plan) return 'solo' // AB's system defaults to solo for internal use
   const plan = profile.plan.toLowerCase()
-  if (plan === 'astro') return 'astro'
+  if (plan === 'internal') return 'internal'
   if (plan === 'enterprise') return 'enterprise'
   if (plan === 'business' || plan === 'pro_plus') return 'business'
   if (plan === 'solo' || plan === 'pro') return 'solo'

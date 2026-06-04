@@ -65,6 +65,29 @@ export async function generateYouTubeScript(channel: 'cardchiefz' | 'resumechief
     ? 'Real card collector and eBay seller. Casual, knowledgeable, community-native. Sounds like the most trusted person at the card show.'
     : 'Real recruiter from Charlotte NC. Direct, practical, no corporate speak. Sounds like insider advice, not a YouTube channel.'
 
+  // ── Research brief: what's actually trending RIGHT NOW ──────────────────────
+  let researchContext = ''
+  try {
+    const { research } = await import('../research')
+    const niche = channel === 'cardchiefz' ? 'sports card collecting and investing' : 'resume building and job search'
+    const [contentResearch, brandResearch] = await Promise.allSettled([
+      research.forContent(niche, channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'),
+      research.forBrand(niche),
+    ])
+
+    if (contentResearch.status === 'fulfilled') {
+      const brief = contentResearch.value
+      researchContext = `
+LIVE RESEARCH BRIEF (verified signals from ${brief.sources.slice(0, 3).join(', ')}):
+Confidence: ${brief.confidence}
+Trending now: ${brief.trendingNow.slice(0, 3).join(' | ') || 'insufficient data'}
+Synthesized insight: ${brief.synthesizedInsight.slice(0, 400)}
+
+Use this intelligence to make the content feel current and relevant.
+If the research doesn't support a claim, don't make it.`
+    }
+  } catch { /* research unavailable — proceed without */ }
+
   const msg = await claude.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
@@ -75,6 +98,7 @@ export async function generateYouTubeScript(channel: 'cardchiefz' | 'resumechief
 VOICE: ${channelVoice}
 
 TOPIC: "${selectedTopic}"
+${researchContext}
 
 ━━━ VIRAL CONTENT RULES (non-negotiable) ━━━
 
