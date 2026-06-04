@@ -73,10 +73,56 @@ const html = `<!DOCTYPE html>
             <p>Ready to build a resume that gets interviews? Try ResumeChiefz free — no credit card required.</p>
             <a href="/app.html" class="cta-button">Build Your Resume Free →</a>
         </div>
+
+        <!-- Email capture — ATS checklist lead magnet -->
+        <div id="email-capture" style="margin-top:40px;background:#0a1628;border:1px solid rgba(201,168,76,0.25);border-radius:12px;padding:36px 32px;text-align:center;">
+            <p style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#c9a84c;margin-bottom:12px;">Free Download</p>
+            <h3 style="font-size:22px;font-weight:800;color:#fff;margin-bottom:10px;line-height:1.3;">The ATS Resume Checklist</h3>
+            <p style="font-size:15px;color:rgba(255,255,255,0.55);margin-bottom:24px;max-width:400px;margin-left:auto;margin-right:auto;">10 things recruiters check in 6 seconds. Fix these before submitting anywhere.</p>
+            <form id="capture-form" onsubmit="submitCapture(event)" style="display:flex;flex-direction:column;gap:12px;max-width:400px;margin:0 auto;">
+                <input type="text" id="cap-name" placeholder="First name" required
+                    style="padding:12px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;font-size:15px;outline:none;font-family:inherit;">
+                <input type="email" id="cap-email" placeholder="Your email" required
+                    style="padding:12px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;font-size:15px;outline:none;font-family:inherit;">
+                <button type="submit"
+                    style="background:#c9a84c;color:#0a1628;font-size:15px;font-weight:700;padding:14px 24px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;">
+                    Send Me the Checklist →
+                </button>
+            </form>
+            <p id="capture-msg" style="display:none;font-size:15px;color:#00ff88;margin-top:16px;font-weight:600;">✓ Check your inbox — it's on its way.</p>
+            <p style="font-size:12px;color:rgba(255,255,255,0.2);margin-top:14px;">No spam. Unsubscribe anytime.</p>
+        </div>
     </div>
     <footer>
-        <p>&copy; 2026 ResumeChiefz. Built by a recruiting expert, for job seekers. | <a href="/blog.html">Blog</a> | <a href="/app.html">Build Your Resume</a></p>
+        <p>&copy; 2026 ResumeChiefz. Built by a recruiting expert, for job seekers. | <a href="/blog.html">Blog</a> | <a href="/app.html">Build Your Resume</a> | <a href="/pricing.html" style="color:#c9a84c;">Pricing</a></p>
     </footer>
+
+    <script>
+    async function submitCapture(e) {
+        e.preventDefault();
+        const btn = e.target.querySelector('button');
+        btn.textContent = 'Sending...';
+        btn.disabled = true;
+        try {
+            const res = await fetch('https://jarvis-os-dusky.vercel.app/api/rc/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: document.getElementById('cap-name').value,
+                    email: document.getElementById('cap-email').value,
+                    source: 'blog-' + window.location.pathname.split('/').pop().replace('.html',''),
+                }),
+            });
+            if (res.ok) {
+                document.getElementById('capture-form').style.display = 'none';
+                document.getElementById('capture-msg').style.display = 'block';
+            } else { throw new Error(); }
+        } catch {
+            btn.textContent = 'Try again';
+            btn.disabled = false;
+        }
+    }
+    </script>
 </body>
 </html>`
 
