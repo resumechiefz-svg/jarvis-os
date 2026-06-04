@@ -480,16 +480,65 @@ function chunkScript(script: string, maxLen: number): string[] {
   return chunks
 }
 
-// ── PHASE 4: Animation via RunwayML ───────────────────────────────────────
+// ── PHASE 4: Animation via Replicate (Wan2.1 image-to-video) ──────────────────
+// Wan2.1 is the best image-to-video model on Replicate — cinematic motion,
+// realistic physics, ~$0.08/clip. No Runway needed.
+
+async function animateSceneReplicate(imgPath: string, clipPath: string, motionPrompt: string, duration: number): Promise<void> {
+  if (!REPLICATE_KEY) throw new Error('No REPLICATE_API_TOKEN')
+
+  const imgBase64 = fs.readFileSync(imgPath).toString('base64')
+  const dataUrl = `data:image/jpeg;base64,${imgBase64}`
+
+  // Start Wan2.1 image-to-video prediction
+  const res = await fetch('https://api.replicate.com/v1/models/wan-video/wan2.1-i2v-480p/predictions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${REPLICATE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'wait',
+    },
+    body: JSON.stringify({
+      input: {
+        image: dataUrl,
+        prompt: motionPrompt,
+        num_frames: Math.min(81, Math.round(duration * 16)),  // 16fps
+        guidance_scale: 5,
+        sample_shift: 8,
+        sample_steps: 20,
+        fast_mode: 'Balanced',
+      },
+    }),
+    signal: AbortSignal.timeout(300000), // 5 min max per clip
+  })
+
+  let prediction = await res.json() as { id: string; status: string; output?: string | string[]; error?: string }
+
+  // Poll if not done yet
+  for (let i = 0; i < 60; i++) {
+    if (prediction.status === 'succeeded') break
+    if (prediction.status === 'failed') throw new Error(`Wan2.1 failed: ${prediction.error}`)
+    await new Promise(r => setTimeout(r, 5000))
+    const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+      headers: { Authorization: `Bearer ${REPLICATE_KEY}` },
+    })
+    prediction = await poll.json() as typeof prediction
+  }
+
+  const videoUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+  if (!videoUrl) throw new Error('No video output from Wan2.1')
+
+  const vidRes = await fetch(videoUrl)
+  fs.writeFileSync(clipPath, Buffer.from(await vidRes.arrayBuffer()))
+}
 
 export async function animateScenes(pkg: VideoPackage): Promise<VideoPackage> {
-  if (!RUNWAY_KEY) {
-    // Fallback: use static images as video (still works, less dynamic)
-    await slack(`⚠️ *[${pkg.title}]* No Runway key — using static images. Add RUNWAY_API_SECRET for animation.`)
+  if (!REPLICATE_KEY && !RUNWAY_KEY) {
+    await slack(`⚠️ *[${pkg.title}]* No animation key — using static images with Ken Burns effect.`)
     return pkg
   }
 
-  await slack(`🎬 *[${pkg.title}]* Animating ${pkg.scenes.length} scenes via RunwayML...`)
+  await slack(`🎬 *[${pkg.title}]* Animating ${pkg.scenes.length} scenes via Replicate Wan2.1...`)
 
   for (const scene of pkg.scenes) {
     const imgPath = path.join(pkg.buildDir, 'images', `scene_${String(scene.id).padStart(3, '0')}.jpg`)
@@ -498,45 +547,32 @@ export async function animateScenes(pkg: VideoPackage): Promise<VideoPackage> {
     if (!fs.existsSync(imgPath) || fs.existsSync(clipPath)) continue
 
     try {
-      const imgBase64 = fs.readFileSync(imgPath).toString('base64')
-      const dataUrl = `data:image/jpeg;base64,${imgBase64}`
-
-      // Create Runway generation task
-      const taskRes = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${RUNWAY_KEY}`,
-          'Content-Type': 'application/json',
-          'X-Runway-Version': '2024-11-06',
-        },
-        body: JSON.stringify({
-          model: 'gen3a_turbo',
-          promptImage: dataUrl,
-          promptText: scene.motionPrompt,
-          duration: Math.min(10, scene.durationEstimate),
-          ratio: '1280:768',
-        }),
-      })
-
-      const task = await taskRes.json() as { id: string; status?: string; output?: string[] }
-
-      // Poll until complete
-      for (let i = 0; i < 60; i++) {
-        const poll = await fetch(`https://api.dev.runwayml.com/v1/tasks/${task.id}`, {
-          headers: { Authorization: `Bearer ${RUNWAY_KEY}`, 'X-Runway-Version': '2024-11-06' },
+      if (REPLICATE_KEY) {
+        await animateSceneReplicate(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
+      } else if (RUNWAY_KEY) {
+        // Runway fallback
+        const imgBase64 = fs.readFileSync(imgPath).toString('base64')
+        const taskRes = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${RUNWAY_KEY}`, 'Content-Type': 'application/json', 'X-Runway-Version': '2024-11-06' },
+          body: JSON.stringify({ model: 'gen3a_turbo', promptImage: `data:image/jpeg;base64,${imgBase64}`, promptText: scene.motionPrompt, duration: Math.min(10, scene.durationEstimate), ratio: '1280:768' }),
         })
-        const result = await poll.json() as { status: string; output?: string[] }
-
-        if (result.status === 'SUCCEEDED' && result.output?.[0]) {
-          const vidRes = await fetch(result.output[0])
-          fs.writeFileSync(clipPath, Buffer.from(await vidRes.arrayBuffer()))
-          break
+        const task = await taskRes.json() as { id: string; status?: string; output?: string[] }
+        for (let i = 0; i < 60; i++) {
+          const poll = await fetch(`https://api.dev.runwayml.com/v1/tasks/${task.id}`, { headers: { Authorization: `Bearer ${RUNWAY_KEY}`, 'X-Runway-Version': '2024-11-06' } })
+          const result = await poll.json() as { status: string; output?: string[] }
+          if (result.status === 'SUCCEEDED' && result.output?.[0]) {
+            const vidRes = await fetch(result.output[0])
+            fs.writeFileSync(clipPath, Buffer.from(await vidRes.arrayBuffer()))
+            break
+          }
+          if (result.status === 'FAILED') break
+          await new Promise(r => setTimeout(r, 5000))
         }
-        if (result.status === 'FAILED') break
-        await new Promise(r => setTimeout(r, 5000))
       }
     } catch (err) {
-      console.error(`[Runway] Scene ${scene.id} failed:`, err)
+      console.error(`[Animation] Scene ${scene.id} failed:`, err)
+      // Non-fatal — FFmpeg will use Ken Burns on this scene's static image
     }
   }
 
