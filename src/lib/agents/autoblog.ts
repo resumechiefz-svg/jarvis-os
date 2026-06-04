@@ -229,51 +229,132 @@ async function deployToVercel(title: string, dateSuffix: string): Promise<string
   return match ? match[0] : 'https://resumechiefz.com/blog.html'
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Generate social preview copy ──────────────────────────────────────────────
+async function previewSocialCopy(post: { title: string; excerpt: string }): Promise<{
+  linkedin: string; twitter: string; pinterest: string
+}> {
+  try {
+    const resp = await claude.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+      messages: [{ role: 'user', content: `Write social copy for ResumeChiefz blog post:
+Title: ${post.title}
+Excerpt: ${post.excerpt}
+Return JSON only: {"linkedin":"150 chars + 2-3 hashtags","twitter":"under 240 chars punchy","pinterest":"100 chars tips-focused"}` }],
+    })
+    const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}'
+    const s = text.indexOf('{'), e = text.lastIndexOf('}')
+    return JSON.parse(text.slice(s, e + 1))
+  } catch {
+    return {
+      linkedin: `${post.title} — new on ResumeChiefz #resume #career #jobsearch`,
+      twitter: `${post.title} → resumechiefz.com`,
+      pinterest: `${post.title} — resume tips that work`,
+    }
+  }
+}
+
+// ── Main export — DRAFT MODE: Slack for approval before publishing ─────────────
 export async function runAutoBlog(brand: 'rc' | 'cc' = 'rc'): Promise<{ title: string; slug: string; savedId: string }> {
   const topics = await getTrendingTopics(brand)
   const post = await writeBlogPost(brand, topics)
   const dateSuffix = new Date().toISOString().slice(0, 10)
+  const pendingUrl = `https://resumechiefz.com/blog/${post.slug}-${dateSuffix}.html`
 
-  // Write file, update blog index, git commit, vercel deploy — via external script
-  let deployedUrl = `https://resumechiefz.com/blog/${post.slug}-${dateSuffix}.html`
-  try {
-    deployedUrl = await publishAndDeploy(post)
-  } catch (err) {
-    console.error('Publish error:', err)
-    deployedUrl += ' (publish may still be processing)'
-  }
+  // Generate social preview
+  const social = await previewSocialCopy(post)
 
-  // Save to Supabase for memory
+  // Save draft to Supabase (status = pending)
   const { data } = await supabaseAdmin.from('ai_memories').insert({
-    category: `blog_published_${brand}`,
+    category: `blog_draft_${brand}`,
     content: post.title,
-    context: JSON.stringify({ ...post, url: deployedUrl, publishedAt: new Date().toISOString() }),
+    context: JSON.stringify({
+      ...post,
+      dateSuffix,
+      brand,
+      pendingUrl,
+      social,
+      status: 'pending',
+    }),
     importance: 7,
     created_at: new Date().toISOString(),
   }).select('id').single()
 
-  // Post to social (LinkedIn, Twitter, Pinterest) via Buffer
-  if (brand === 'rc' && !deployedUrl.includes('processing')) {
-    try {
-      const { postBlogToSocial } = await import('./buffer-social')
-      await postBlogToSocial({ title: post.title, excerpt: post.excerpt, slug: post.slug, liveUrl: deployedUrl })
-    } catch (err) {
-      console.error('Buffer social error:', err)
-    }
-  }
-
-  // Slack the real live URL
+  const draftId = data?.id ?? ''
   const brandName = brand === 'rc' ? 'ResumeChiefz' : 'Card Chiefz'
-  await slack(`
-📝 *ECHO — ${brandName} Blog Published*
+
+  // Slack the full preview — you review and react ✅ to approve or ❌ to discard
+  const { slackWithTs } = await import('../slack')
+  await slackWithTs(`
+✍️ *ECHO — ${brandName} Blog Draft Ready for Review*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 *Title:* ${post.title}
 *Tag:* ${post.tag}
 
+*Excerpt:*
 ${post.excerpt}
 
-Live at: ${deployedUrl}
+─────────────────────────────
+*📌 LinkedIn copy:*
+${social.linkedin}
+
+*🐦 Twitter/X copy:*
+${social.twitter}
+
+*🖼️ Pinterest copy:*
+${social.pinterest}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+React ✅ to *publish + post to all socials*
+React ❌ to *discard*
+_Draft ID: ${draftId}_
   `.trim(), 'echo')
 
-  return { title: post.title, slug: post.slug, savedId: data?.id ?? '' }
+  return { title: post.title, slug: post.slug, savedId: draftId }
+}
+
+// ── Called by Slack webhook when you react ✅ ─────────────────────────────────
+export async function approveBlogDraft(draftId: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+  try {
+    // Load draft from Supabase
+    const { data } = await supabaseAdmin
+      .from('ai_memories')
+      .select('context')
+      .eq('id', draftId)
+      .single()
+
+    if (!data) return { ok: false, error: 'Draft not found' }
+
+    const draft = JSON.parse(data.context) as {
+      title: string; slug: string; excerpt: string; tag: string; content: string
+      dateSuffix: string; brand: string; pendingUrl: string; social: { linkedin: string; twitter: string; pinterest: string }
+    }
+
+    // Publish to site
+    let liveUrl = draft.pendingUrl
+    try {
+      liveUrl = await publishAndDeploy(draft)
+    } catch (err) {
+      console.error('Publish error:', err)
+    }
+
+    // Post to Buffer (LinkedIn, Twitter, Pinterest)
+    try {
+      const { postBlogToSocial } = await import('./buffer-social')
+      await postBlogToSocial({ title: draft.title, excerpt: draft.excerpt, slug: draft.slug, liveUrl })
+    } catch (err) {
+      console.error('Buffer error:', err)
+    }
+
+    // Update Supabase status
+    await supabaseAdmin.from('ai_memories').update({
+      category: `blog_published_${draft.brand}`,
+      context: JSON.stringify({ ...draft, liveUrl, status: 'published', publishedAt: new Date().toISOString() }),
+    }).eq('id', draftId)
+
+    // Slack confirmation
+    await slack(`✅ *Published!* ${draft.title}\n${liveUrl}`, 'echo')
+
+    return { ok: true, url: liveUrl }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Unknown error' }
+  }
 }

@@ -82,3 +82,17 @@ export async function slackNow(text: string, channel = '#jarvis'): Promise<void>
     body: JSON.stringify({ channel, text }),
   }).catch(() => {})
 }
+
+/** Post a message and return its timestamp (needed for reaction-based approval) */
+export async function slackWithTs(text: string, channel = '#jarvis'): Promise<string | null> {
+  if (!TOKEN) return null
+  try {
+    const res = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, text }),
+    })
+    const data = await res.json() as { ok: boolean; ts?: string; channel?: string }
+    return data.ok ? (data.ts ?? null) : null
+  } catch { return null }
+}
