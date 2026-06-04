@@ -390,18 +390,15 @@ export async function generateImages(pkg: VideoPackage): Promise<VideoPackage> {
     if (fs.existsSync(finalPath)) continue
 
     try {
-      // 1. Generate base image
-      // Priority: Replicate (cheapest, pay-per-use) → Imagen Fast (fallback only)
-      // Imagen only used if Replicate fails — protects the $10 budget
+      // 1. Generate base image — Imagen 4 Fast first (Google native, best quality)
+      // Replicate only if Imagen fails
       let imageGenerated = false
-      if (REPLICATE_KEY) {
-        try {
-          await generateImageReplicate(scene.imagePrompt, rawPath)
-          imageGenerated = true
-        } catch { /* fall through to Imagen */ }
-      }
-      if (!imageGenerated) {
+      try {
         await generateImageWithImagen(scene.imagePrompt, rawPath)
+        imageGenerated = true
+      } catch { /* fall through to Replicate */ }
+      if (!imageGenerated && REPLICATE_KEY) {
+        await generateImageReplicate(scene.imagePrompt, rawPath)
       }
 
       // 2. Composite text overlay via FFmpeg (this is how the examples were made)
@@ -520,9 +517,74 @@ function chunkScript(script: string, maxLen: number): string[] {
   return chunks
 }
 
-// ── PHASE 4: Animation via Replicate (Wan2.1 image-to-video) ──────────────────
-// Wan2.1 is the best image-to-video model on Replicate — cinematic motion,
-// realistic physics, ~$0.08/clip. No Runway needed.
+// ── PHASE 4: Animation via Veo 2 (primary) → Replicate Wan2.1 (fallback) ─────
+// Veo 2 = Google's best video model, cinematic quality, ~$0.35/clip
+// Replicate Wan2.1 = solid fallback, ~$0.08/clip
+
+async function animateSceneVeo2(imgPath: string, clipPath: string, motionPrompt: string, duration: number): Promise<void> {
+  const apiKey = process.env.GOOGLE_IMAGEN_API_KEY
+  if (!apiKey) throw new Error('No GOOGLE_IMAGEN_API_KEY')
+
+  const imgBase64 = fs.readFileSync(imgPath).toString('base64')
+
+  // Start Veo 2 long-running operation
+  const startRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{
+          prompt: motionPrompt,
+          image: { bytesBase64Encoded: imgBase64, mimeType: 'image/jpeg' },
+        }],
+        parameters: {
+          aspectRatio: '16:9',
+          durationSeconds: Math.min(8, Math.max(5, Math.round(duration))),
+          sampleCount: 1,
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    }
+  )
+
+  const op = await startRes.json() as { name?: string; error?: { message: string } }
+  if (op.error) throw new Error(`Veo 2 start failed: ${op.error.message}`)
+  if (!op.name) throw new Error('No operation name from Veo 2')
+
+  // Poll until complete (Veo 2 takes 2-5 minutes per clip)
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 10000)) // poll every 10s
+    const poll = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${op.name}?key=${apiKey}`,
+      { signal: AbortSignal.timeout(10000) }
+    )
+    const result = await poll.json() as {
+      done?: boolean
+      response?: { predictions?: Array<{ video?: { uri?: string; bytesBase64Encoded?: string } }> }
+      error?: { message: string }
+    }
+
+    if (result.error) throw new Error(`Veo 2 failed: ${result.error.message}`)
+
+    if (result.done && result.response) {
+      const video = result.response.predictions?.[0]?.video
+      if (video?.bytesBase64Encoded) {
+        fs.writeFileSync(clipPath, Buffer.from(video.bytesBase64Encoded, 'base64'))
+        trackImagenUsage('veo-2', 0.35).catch(() => {})
+        return
+      }
+      if (video?.uri) {
+        const vidRes = await fetch(video.uri)
+        fs.writeFileSync(clipPath, Buffer.from(await vidRes.arrayBuffer()))
+        trackImagenUsage('veo-2', 0.35).catch(() => {})
+        return
+      }
+      throw new Error('Veo 2 returned no video data')
+    }
+  }
+  throw new Error('Veo 2 timed out')
+}
 
 async function animateSceneReplicate(imgPath: string, clipPath: string, motionPrompt: string, duration: number): Promise<void> {
   if (!REPLICATE_KEY) throw new Error('No REPLICATE_API_TOKEN')
@@ -573,12 +635,13 @@ async function animateSceneReplicate(imgPath: string, clipPath: string, motionPr
 }
 
 export async function animateScenes(pkg: VideoPackage): Promise<VideoPackage> {
-  if (!REPLICATE_KEY && !RUNWAY_KEY) {
-    await slack(`⚠️ *[${pkg.title}]* No animation key — using static images with Ken Burns effect.`)
+  const googleKey = process.env.GOOGLE_IMAGEN_API_KEY
+  if (!googleKey && !REPLICATE_KEY && !RUNWAY_KEY) {
+    await slack(`⚠️ *[${pkg.title}]* No animation API — using Ken Burns static effect.`)
     return pkg
   }
 
-  await slack(`🎬 *[${pkg.title}]* Animating ${pkg.scenes.length} scenes via Replicate Wan2.1...`)
+  await slack(`🎬 *[${pkg.title}]* Animating ${pkg.scenes.length} scenes via Veo 2...`)
 
   for (const scene of pkg.scenes) {
     const imgPath = path.join(pkg.buildDir, 'images', `scene_${String(scene.id).padStart(3, '0')}.jpg`)
@@ -587,6 +650,15 @@ export async function animateScenes(pkg: VideoPackage): Promise<VideoPackage> {
     if (!fs.existsSync(imgPath) || fs.existsSync(clipPath)) continue
 
     try {
+      // Veo 2 first (Google native, best quality) → Replicate fallback → Runway last resort
+      if (googleKey) {
+        try {
+          await animateSceneVeo2(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
+          continue
+        } catch (err) {
+          console.error(`[Veo 2] Scene ${scene.id} failed, trying Replicate:`, err)
+        }
+      }
       if (REPLICATE_KEY) {
         await animateSceneReplicate(imgPath, clipPath, scene.motionPrompt, scene.durationEstimate)
       } else if (RUNWAY_KEY) {
