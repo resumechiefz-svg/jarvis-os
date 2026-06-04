@@ -298,7 +298,7 @@ export default function HUD() {
           flexShrink: 0, height: 'clamp(36px,3.8vh,46px)',
           display: 'flex', alignItems: 'center',
           borderBottom: '1px solid rgba(0,212,255,0.07)',
-          background: 'rgba(0, 3, 12, 0.88)',
+          background: 'rgba(0, 2, 10, 0.75)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           boxShadow: '0 1px 0 rgba(0,212,255,0.04), 0 4px 20px rgba(0,0,0,0.5)',
@@ -321,7 +321,7 @@ export default function HUD() {
           <div style={{
             width: leftOpen ? PANEL_W : 38, flexShrink: 0,
             borderRight: '1px solid rgba(0,212,255,0.06)',
-            background: 'rgba(0,3,12,0.82)',
+            background: 'rgba(0,3,12,0.55)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
             transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
@@ -335,7 +335,7 @@ export default function HUD() {
                 else { setLeftOpen(o => !o) }
                 leftTapRef.current = now
               }}
-              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', zIndex: 11, background: leftOpen ? 'transparent' : 'rgba(0,4,14,0.95)' }}
+              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 38, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', zIndex: 11, background: leftOpen ? 'transparent' : 'rgba(0,4,14,0.55)' }}
             >
               {['◈', '◉', '▲', '◆'].map((icon, i) => (
                 <div key={i} style={{ fontSize: 11, color: 'rgba(0,212,255,0.25)', transition: 'color 0.2s' }}>{icon}</div>
@@ -446,7 +446,7 @@ export default function HUD() {
             </div>
 
             {/* ── Live feed strip — collapsible ── */}
-            <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.06)', background: 'rgba(0,0,0,0.7)', zIndex: 2, transition: 'max-height 0.3s ease', maxHeight: feedOpen ? '28%' : '28px', overflow: 'hidden' }}>
+            <div style={{ flexShrink: 0, borderTop: '1px solid rgba(0,212,255,0.06)', background: 'rgba(0,0,0,0.45)', zIndex: 2, transition: 'max-height 0.3s ease', maxHeight: feedOpen ? '28%' : '28px', overflow: 'hidden' }}>
               <div
                 onClick={() => setFeedOpen(o => !o)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', cursor: 'pointer', userSelect: 'none' }}
@@ -485,7 +485,7 @@ export default function HUD() {
           <div style={{
             width: rightOpen ? PANEL_W : 38, flexShrink: 0,
             borderLeft: '1px solid rgba(0,212,255,0.06)',
-            background: 'rgba(0,3,12,0.82)',
+            background: 'rgba(0,3,12,0.55)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
             transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1)',
@@ -512,7 +512,7 @@ export default function HUD() {
         <div style={{
           flexShrink: 0,
           borderTop: '1px solid rgba(0,212,255,0.1)',
-          background: 'rgba(0, 2, 10, 0.94)',
+          background: 'rgba(0, 2, 10, 0.85)',
           backdropFilter: 'blur(30px)',
           WebkitBackdropFilter: 'blur(30px)',
           boxShadow: '0 -1px 0 rgba(0,212,255,0.04), 0 -20px 60px rgba(0,0,0,0.4)',

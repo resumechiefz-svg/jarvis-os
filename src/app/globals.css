@@ -2,7 +2,7 @@
 
 /* ═══════════════════════════════════════════════════════════════
    JARVIS OS — PREMIUM DESIGN SYSTEM
-   "From the future. Built today."
+   Fonts loaded via layout.tsx <head> — not here (Next.js 16)
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── Design Tokens ─────────────────────────────────────────── */
@@ -45,15 +45,14 @@
 html, body {
   height: 100%;
   overflow: hidden;
-  background: var(--void);
+  background: transparent;
   color: rgba(255, 255, 255, 0.88);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Google Fonts Import ───────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Fonts: loaded via layout.tsx head — preconnected for performance */
 
 /* ═══════════════════════════════════════════════════════════
    AURORA NEBULA BACKGROUND SYSTEM
@@ -71,47 +70,49 @@ html, body {
 .aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.12;
+  filter: blur(70px);
+  opacity: 0.28;
   mix-blend-mode: screen;
+  will-change: transform;
 }
 
 .aurora-1 {
-  width: 60vw;
-  height: 60vw;
-  background: radial-gradient(circle, #0066ff 0%, #00d4ff 40%, transparent 70%);
-  top: -20%;
-  left: -10%;
-  animation: aurora-drift-1 25s ease-in-out infinite;
+  width: 65vw;
+  height: 65vw;
+  background: radial-gradient(circle, #003aff 0%, #00c4ff 35%, transparent 65%);
+  top: -25%;
+  left: -15%;
+  animation: aurora-drift-1 22s ease-in-out infinite;
 }
 
 .aurora-2 {
-  width: 50vw;
-  height: 50vw;
-  background: radial-gradient(circle, #6600ff 0%, #a855f7 40%, transparent 70%);
-  bottom: -15%;
-  right: -10%;
-  animation: aurora-drift-2 30s ease-in-out infinite;
+  width: 55vw;
+  height: 55vw;
+  background: radial-gradient(circle, #7c00ff 0%, #a855f7 35%, transparent 65%);
+  bottom: -20%;
+  right: -15%;
+  animation: aurora-drift-2 28s ease-in-out infinite;
+  opacity: 0.22;
 }
 
 .aurora-3 {
-  width: 40vw;
-  height: 40vw;
-  background: radial-gradient(circle, #00ff88 0%, #00d4ff 50%, transparent 70%);
-  top: 30%;
-  right: 20%;
-  animation: aurora-drift-3 20s ease-in-out infinite;
-  opacity: 0.07;
+  width: 45vw;
+  height: 45vw;
+  background: radial-gradient(circle, #00ff88 0%, #00d4ff 45%, transparent 65%);
+  top: 25%;
+  right: 15%;
+  animation: aurora-drift-3 18s ease-in-out infinite;
+  opacity: 0.15;
 }
 
 .aurora-4 {
-  width: 35vw;
-  height: 35vw;
-  background: radial-gradient(circle, #c9a84c 0%, #ff6b35 50%, transparent 70%);
-  bottom: 20%;
-  left: 15%;
-  animation: aurora-drift-4 35s ease-in-out infinite;
-  opacity: 0.06;
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, #c9a84c 0%, #ff6000 45%, transparent 65%);
+  bottom: 15%;
+  left: 10%;
+  animation: aurora-drift-4 32s ease-in-out infinite;
+  opacity: 0.12;
 }
 
 @keyframes aurora-drift-1 {
