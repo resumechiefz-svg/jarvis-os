@@ -456,6 +456,40 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   }
 
   // ── Voice-to-action: Full YouTube video pipeline ───────────
+  // ── Career/Life path planning ─────────────────────────────────────────
+  if (/(how do i|steps to|path to|plan for|want to start|how to become|guide me|walk me through|help me (start|become|build|launch|get into))/i.test(userMessage)) {
+    try {
+      const { generatePath, formatPathForSlack } = await import('./pathfinder')
+      const { slack } = await import('../slack')
+      const goal = userMessage.replace(/^(how do i|steps to|path to|plan for|help me|guide me|walk me through)\s+/i, '').trim()
+
+      // Generate async — don't block the voice response
+      generatePath(goal, 'Starting fresh').then(async path => {
+        const msg = formatPathForSlack(path)
+        await slack(msg, 'echo')
+      }).catch(() => {})
+
+      return {
+        agent: 'jarvis' as AgentName,
+        message: `I'll map that out for you. Give me a moment to research the requirements, licensing, certifications, and steps specific to that path. It'll be in your Slack shortly with everything laid out — quick wins for today, the full roadmap, and what you can't skip.`,
+      }
+    } catch { /* fall through to normal response */ }
+  }
+
+  // ── Relationship / meeting brief ──────────────────────────────────────────
+  if (/(meeting with|brief on|who is|remind me about|before i meet|tell me about) ([A-Z][a-z]+ [A-Z][a-z]+|[A-Z][a-z]+)/i.test(userMessage)) {
+    try {
+      const { getMeetingBrief } = await import('./relationships')
+      const nameMatch = userMessage.match(/(meeting with|brief on|who is|remind me about|before i meet|tell me about) ([A-Z][a-z]+(?: [A-Z][a-z]+)?)/i)
+      const name = nameMatch?.[2]?.trim()
+
+      if (name) {
+        const brief = await getMeetingBrief('ab', name)
+        return { agent: 'sage' as AgentName, message: brief }
+      }
+    } catch { /* fall through */ }
+  }
+
   // ── Instagram carousel ─────────────────────────────────────────
   if (/(make|create|generate|run) (an? )?(instagram |ig )?carousel|ig post|instagram post|instagram carousel/i.test(userMessage)) {
     try {

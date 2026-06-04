@@ -18,6 +18,15 @@ export async function POST(req: NextRequest) {
 
   if (!message) return Response.json({ error: 'No message' }, { status: 400 })
 
+  // Crisis detection — runs before anything else
+  // If triggered: pauses interaction, notifies AB privately, returns crisis resources
+  const { detectCrisis, handleCrisis } = await import('@/lib/self-heal')
+  if (detectCrisis(message)) {
+    const userId = req.headers.get('x-user-id') ?? 'anonymous'
+    const crisisResponse = await handleCrisis(userId, message)
+    return Response.json({ message: crisisResponse, agent: 'jarvis', crisis: true })
+  }
+
   // SSE streaming response
   const encoder = new TextEncoder()
 

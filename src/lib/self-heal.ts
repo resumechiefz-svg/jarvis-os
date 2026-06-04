@@ -137,15 +137,18 @@ export async function heal<T>(
       }
 
       if (severity === 'escalate') {
-        // Notify immediately — needs human or Dex attention
+        // Route silently to internal operations — customer NEVER sees this
+        // AB diagnoses and fixes before the customer is aware anything happened
         await slack(
-          `🔧 *Jarvis Self-Heal — Action Required*\n` +
-          `Agent: \`${agentId}\`\n` +
-          `Issue: ${category.replace(/_/g, ' ')}\n` +
-          `Details: ${lastError.message.slice(0, 200)}\n` +
-          `Action needed: ${action}`,
-          'echo'
+          `🔧 *[INTERNAL] Agent Escalation — ${agentId}*\n` +
+          `Category: ${category.replace(/_/g, ' ')}\n` +
+          `Error: ${lastError.message.slice(0, 300)}\n` +
+          `Context: ${JSON.stringify(context).slice(0, 200)}\n` +
+          `Stack: ${lastError.stack?.slice(0, 400) ?? 'none'}\n\n` +
+          `_Customer experience continues uninterrupted. Fix and close._`,
+          'echo'  // internal Slack channel only — not exposed to customer
         ).catch(() => {})
+        // Customer-facing: nothing. Silence. Their Jarvis keeps working.
       }
 
       break
@@ -153,6 +156,54 @@ export async function heal<T>(
   }
 
   return null
+}
+
+// ── Crisis Safety Protocol ────────────────────────────────────────────────────
+// If any user message triggers crisis signals:
+// 1. Interaction pauses
+// 2. AB is notified privately and immediately
+// 3. System provides crisis resources to user
+// 4. AB reaches out to customer personally
+// This is a non-negotiable line. The system never crosses it, never enables harm.
+
+const CRISIS_SIGNALS = [
+  /suicid/i, /kill myself/i, /end my life/i, /don't want to live/i,
+  /self.harm/i, /hurt myself/i, /want to die/i, /no reason to live/i,
+  /harm (someone|others|him|her|them)/i, /hurt (someone|others|him|her|them)/i,
+]
+
+export function detectCrisis(message: string): boolean {
+  return CRISIS_SIGNALS.some(pattern => pattern.test(message))
+}
+
+export async function handleCrisis(userId: string, message: string): Promise<string> {
+  // Notify AB immediately and privately
+  await slack(
+    `🚨 *[URGENT — PRIVATE] Crisis Signal Detected*\n` +
+    `User: ${userId}\n` +
+    `Trigger: ${message.slice(0, 100)}\n\n` +
+    `Reach out to this customer directly. They need a human right now.`,
+    'echo'
+  ).catch(() => {})
+
+  // Log to Supabase for follow-up
+  await supabaseAdmin.from('ai_memories').insert({
+    category: 'crisis_log',
+    content: userId,
+    context: JSON.stringify({ userId, trigger: message.slice(0, 200), timestamp: new Date().toISOString() }),
+    importance: 10,
+    created_at: new Date().toISOString(),
+  }).catch(() => {})
+
+  // Return crisis resources to user — warm, human, immediate
+  return `I hear you, and I want to make sure you're okay right now.
+
+If you're going through something difficult, please reach out:
+• **988 Suicide & Crisis Lifeline** — call or text 988 (US)
+• **Crisis Text Line** — text HOME to 741741
+• **International Association for Suicide Prevention** — https://www.iasp.info/resources/Crisis_Centres/
+
+You matter. A real person from our team will be in touch with you shortly.`
 }
 
 // ── Weekly fix report ─────────────────────────────────────────────────────────
