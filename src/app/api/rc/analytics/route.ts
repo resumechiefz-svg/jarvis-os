@@ -63,7 +63,7 @@ export async function GET() {
         context: JSON.stringify({ ...video, channel: 'resumechiefz', syncedAt: new Date().toISOString() }),
         importance: 6,
         created_at: new Date().toISOString(),
-      }, { onConflict: 'content' }).catch(() => {})
+      }, { onConflict: 'content' })
     }
 
     for (const video of ccStats) {
@@ -73,7 +73,7 @@ export async function GET() {
         context: JSON.stringify({ ...video, channel: 'cardchiefz', syncedAt: new Date().toISOString() }),
         importance: 6,
         created_at: new Date().toISOString(),
-      }, { onConflict: 'content' }).catch(() => {})
+      }, { onConflict: 'content' })
     }
 
     // Identify top performers (top 25% by views) and store as style reference
@@ -87,7 +87,7 @@ export async function GET() {
         context: JSON.stringify({ videos: topRC, updatedAt: new Date().toISOString() }),
         importance: 8,
         created_at: new Date().toISOString(),
-      }, { onConflict: 'content' }).catch(() => {})
+      }, { onConflict: 'content' })
     }
 
     const { slack } = await import('@/lib/slack')

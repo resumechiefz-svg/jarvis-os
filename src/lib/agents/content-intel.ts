@@ -215,6 +215,6 @@ export async function refreshContentCatalog(): Promise<void> {
       context: JSON.stringify({ source: 'youtube', syncedAt: new Date().toISOString() }),
       importance: 5,
       created_at: new Date().toISOString(),
-    }, { onConflict: 'content' }).catch(() => {})
+    }, { onConflict: 'content' })
   }
 }
