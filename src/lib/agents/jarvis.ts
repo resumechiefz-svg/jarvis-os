@@ -293,17 +293,30 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
   }
 
   // ── LinkedIn post ─────────────────────────────────────────
-  if (/post to linkedin|linkedin post|share on linkedin/i.test(userMessage)) {
+  if (/post to linkedin|linkedin post|share on linkedin|post to twitter|tweet this|post to social|post this/i.test(userMessage)) {
     try {
-      const { postToLinkedIn, isLinkedInConnected } = await import('./linkedin')
-      const connected = await isLinkedInConnected()
-      if (!connected) return { agent: 'echo' as AgentName, message: `LinkedIn not connected yet, sir. Visit /api/linkedin/auth to authorize, then I can post directly.` }
-      const content = userMessage.replace(/post (this |to |on )?linkedin:?/i, '').trim()
-      if (!content || content.length < 20) return { agent: 'echo' as AgentName, message: 'What would you like me to post? Give me the content.' }
-      const id = await postToLinkedIn(content)
-      return { agent: 'echo' as AgentName, message: `Posted to LinkedIn, sir. Post ID: ${id}` }
+      const { postToLinkedInBuffer, postToTwitterBuffer } = await import('./buffer-social')
+      const content = userMessage
+        .replace(/post (this |to |on )?(linkedin|twitter|social):?/i, '')
+        .replace(/tweet (this:?)?/i, '')
+        .trim()
+      if (!content || content.length < 10) return { agent: 'echo' as AgentName, message: 'What would you like me to post? Give me the content.' }
+
+      const toLinkedIn = /linkedin|social/i.test(userMessage)
+      const toTwitter = /twitter|tweet|social/i.test(userMessage)
+
+      const results: string[] = []
+      if (toLinkedIn) {
+        const r = await postToLinkedInBuffer(content)
+        results.push(r.success ? 'LinkedIn ✓ queued in Buffer' : `LinkedIn failed: ${r.error}`)
+      }
+      if (toTwitter) {
+        const r = await postToTwitterBuffer(content.slice(0, 240))
+        results.push(r.success ? 'Twitter ✓ queued in Buffer' : `Twitter failed: ${r.error}`)
+      }
+      return { agent: 'echo' as AgentName, message: results.join(' | ') }
     } catch (err) {
-      return { agent: 'echo' as AgentName, message: `LinkedIn post failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
+      return { agent: 'echo' as AgentName, message: `Social post failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
     }
   }
 
@@ -492,12 +505,31 @@ export async function chat(userMessage: string, history: Array<{ role: 'user' | 
     }
   }
 
-  // ── News intel ─────────────────────────────────────────────
-  if (/news|what.*happening|market news|any news|morning news/i.test(userMessage)) {
+  // ── Weather ────────────────────────────────────────────────
+  if (/weather|temperature|forecast|how.*hot|how.*cold|raining|sunny|gonna rain|outside like/i.test(userMessage)) {
     try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'}/api/weather`)
+      const w = await res.json() as { summary?: string; temp?: number; condition?: string; error?: string }
+      if (w.error) return { agent: 'jarvis' as AgentName, message: `Weather unavailable right now, sir.` }
+      return { agent: 'jarvis' as AgentName, message: w.summary ?? `${w.temp}° and ${w.condition} in Charlotte.`, card: 'weather' }
+    } catch {
+      return { agent: 'jarvis' as AgentName, message: `Couldn't reach weather service, sir.` }
+    }
+  }
+
+  // ── News intel ─────────────────────────────────────────────
+  if (/top news|news brief|headlines|what.*happening|market news|any news|morning news|overnight news/i.test(userMessage)) {
+    try {
+      // Fetch live headlines directly and speak them
+      const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'}/api/news`)
+      const headlines = await res.json() as Array<{ headline: string; source: string }>
+      if (Array.isArray(headlines) && headlines.length > 0) {
+        const top5 = headlines.slice(0, 5).map((h, i) => `${i + 1}. ${h.headline}`).join(' ')
+        return { agent: 'scout' as AgentName, message: `Here are your top headlines: ${top5}`, card: 'news' }
+      }
       const { runNewsIntel } = await import('./news-intel')
       await runNewsIntel()
-      return { agent: 'scout' as AgentName, message: `News sweep done, sir. Filtered to what matters — posted to #jarvis.` }
+      return { agent: 'scout' as AgentName, message: `News sweep done, sir. Top stories posted to Slack.` }
     } catch (err) {
       return { agent: 'scout' as AgentName, message: `News intel failed: ${err instanceof Error ? err.message : 'Unknown error'}` }
     }
@@ -688,13 +720,13 @@ export async function morningBrief(): Promise<JarvisResponse> {
 export type StreamEvent =
   | { type: 'agent'; agent: AgentName }
   | { type: 'delta'; text: string }
-  | { type: 'done'; fullText: string }
+  | { type: 'done'; fullText: string; card?: 'weather' | 'news' }
   | { type: 'error'; message: string }
 
-async function* yieldStatic(agent: AgentName, message: string): AsyncGenerator<StreamEvent> {
+async function* yieldStatic(agent: AgentName, message: string, card?: 'weather' | 'news'): AsyncGenerator<StreamEvent> {
   yield { type: 'agent', agent }
   yield { type: 'delta', text: message }
-  yield { type: 'done', fullText: message }
+  yield { type: 'done', fullText: message, ...(card ? { card } : {}) }
 }
 
 export async function* chatStream(
@@ -721,12 +753,14 @@ export async function* chatStream(
     /competitor|comp.*scan|market intel/i.test(userMessage) ||
     /trading patterns|trade journal/i.test(userMessage) ||
     /(make|create|produce) (a )?(full )?(youtube )?video|youtube pipeline/i.test(userMessage) ||
-    /remember\s*(that|this|:)?/i.test(userMessage)
+    /remember\s*(that|this|:)?/i.test(userMessage) ||
+    /weather|temperature|forecast|how.*hot|how.*cold|raining|sunny|gonna rain|outside like/i.test(userMessage) ||
+    /top news|news brief|headlines|what.*happening|market news|any news|morning news|overnight news/i.test(userMessage)
 
   if (isSpecial) {
     try {
       const result = await chat(userMessage, history)
-      yield* yieldStatic(result.agent, result.message)
+      yield* yieldStatic(result.agent, result.message, result.card)
     } catch (err) {
       yield { type: 'error', message: String(err) }
     }

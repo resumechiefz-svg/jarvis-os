@@ -18,6 +18,7 @@ import type { PanelData } from '@/components/hud/FloatingPanel'
 const CommandInterface = dynamic(() => import('@/components/hud/CommandInterface'), { ssr: false })
 const JarvisOrb = dynamic(() => import('@/components/orb/JarvisOrb'), { ssr: false })
 const DexControlPanel = dynamic(() => import('@/components/hud/DexControlPanel'), { ssr: false })
+const InfoCard = dynamic(() => import('@/components/hud/InfoCard'), { ssr: false })
 
 const AGENT_COLORS: Record<string, string> = {
   jarvis: '#00d4ff', nova: '#a855f7', sage: '#00ff88', vault: '#c9a84c',
@@ -62,8 +63,9 @@ export default function HUD() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set())
   const [panels, setPanels] = useState<PanelData[]>([])
-  const [dexTask, setDexTask] = useState<string | null>(null)   // Dex computer control task
-  const dexAbortRef = useRef<(() => void) | null>(null)          // Ref to Dex abort function
+  const [dexTask, setDexTask] = useState<string | null>(null)
+  const dexAbortRef = useRef<(() => void) | null>(null)
+  const [infoCard, setInfoCard] = useState<'weather' | 'news' | null>(null)
   const { tasks, startTask, completeTask, errorTask, dismissTask } = useAgentTasks()
   const [loading, setLoading] = useState(false)
   const [speaking, setSpeaking] = useState(false)
@@ -165,6 +167,11 @@ export default function HUD() {
       return true
     }
 
+    // Info card voice dismiss
+    if (infoCard && (t.includes('close it') || t.includes('got it') || t.includes('dismiss') || t.includes('close card') || t.includes('hide it'))) {
+      setInfoCard(null); return true
+    }
+
     if (t.includes('hide left') || t.includes('close left')) { setLeftOpen(false); return true }
     if (t.includes('hide right') || t.includes('close right')) { setRightOpen(false); return true }
     if (t.includes('hide both') || t.includes('close both') || t.includes('hide panels') || t.includes('close panels')) {
@@ -176,7 +183,7 @@ export default function HUD() {
     if (t.includes('show left') || t.includes('open left')) { setLeftOpen(true); return true }
     if (t.includes('show right') || t.includes('open right')) { setRightOpen(true); return true }
     return false
-  }, [])
+  }, [dexTask, infoCard])
 
   // Data polling
   useEffect(() => {
@@ -251,6 +258,9 @@ export default function HUD() {
   return (
     <>
       <HexGrid />
+
+      {/* Info card overlay — weather, news, quick-pull data */}
+      {infoCard && <InfoCard type={infoCard} onClose={() => setInfoCard(null)} />}
 
       {/* Dex computer control overlay — fullscreen when active */}
       {dexTask && (
@@ -494,7 +504,11 @@ export default function HUD() {
           ))}
           <CommandInterface
             messages={messages}
-            onMessage={msg => { setMessages(prev => [...prev, msg]); markActive() }}
+            onMessage={msg => {
+              setMessages(prev => [...prev, msg])
+              markActive()
+              if (msg.card) setInfoCard(msg.card)
+            }}
             onAgentChange={agent => { setActiveAgent(agent); markActive() }}
             onAmplitude={amp => { setAmplitude(amp); if (amp > 0.05) setSpeaking(true); else setSpeaking(false) }}
             onLoadingChange={setLoading}

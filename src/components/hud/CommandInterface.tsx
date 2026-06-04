@@ -144,7 +144,7 @@ export default function CommandInterface({
             } else if (ev.type === 'done') {
               const final = ev.fullText ?? fullText
               setStreamText('')
-              onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: currentAgent, content: final, timestamp: new Date() })
+              onMessage({ id: (Date.now() + 1).toString(), role: 'assistant', agent: currentAgent, content: final, timestamp: new Date(), ...(ev.card ? { card: ev.card } : {}) })
               setHistory(h => [...h, { role: 'assistant', content: final }])
               onTaskComplete?.(currentAgent)
               speakText(final, currentAgent)

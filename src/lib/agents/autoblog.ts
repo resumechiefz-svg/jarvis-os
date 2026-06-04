@@ -248,15 +248,25 @@ export async function runAutoBlog(brand: 'rc' | 'cc' = 'rc'): Promise<{ title: s
   const { data } = await supabaseAdmin.from('ai_memories').insert({
     category: `blog_published_${brand}`,
     content: post.title,
-    context: JSON.stringify({ ...post, url: liveUrl, publishedAt: new Date().toISOString() }),
+    context: JSON.stringify({ ...post, url: deployedUrl, publishedAt: new Date().toISOString() }),
     importance: 7,
     created_at: new Date().toISOString(),
   }).select('id').single()
 
+  // Post to social (LinkedIn, Twitter, Pinterest) via Buffer
+  if (brand === 'rc' && !deployedUrl.includes('processing')) {
+    try {
+      const { postBlogToSocial } = await import('./buffer-social')
+      await postBlogToSocial({ title: post.title, excerpt: post.excerpt, slug: post.slug, liveUrl: deployedUrl })
+    } catch (err) {
+      console.error('Buffer social error:', err)
+    }
+  }
+
   // Slack the real live URL
   const brandName = brand === 'rc' ? 'ResumeChiefz' : 'Card Chiefz'
   await slack(`
-📝 *ECHO — RC Blog Published*
+📝 *ECHO — ${brandName} Blog Published*
 *Title:* ${post.title}
 *Tag:* ${post.tag}
 

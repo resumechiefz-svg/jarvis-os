@@ -16,6 +16,7 @@ export interface Message {
   agent: AgentName
   content: string
   timestamp: Date
+  card?: 'weather' | 'news'
 }
 
 export interface TelemetryEntry {
@@ -73,6 +74,7 @@ export interface SageBrief {
 export interface JarvisResponse {
   agent: AgentName
   message: string
+  card?: 'weather' | 'news'
   data?: Record<string, unknown>
   actions?: Array<{ label: string; action: string }>
 }
