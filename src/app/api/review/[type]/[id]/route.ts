@@ -12,6 +12,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ typ
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const ctx = JSON.parse(data.context ?? '{}')
+  // For YouTube, build the streaming video URL
+  const videoUrl = ctx.videoPath
+    ? `/api/video/${data.id}`
+    : ctx.videoUrl ?? null
+
   return NextResponse.json({
     id: data.id,
     type,
@@ -19,10 +24,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ typ
     title: data.content,
     status: ctx.status ?? 'pending',
     createdAt: data.created_at,
-    // YouTube
-    videoUrl: ctx.videoUrl,
+    // YouTube — video URL points to our streaming endpoint
+    videoUrl,
     thumbnailUrl: ctx.thumbnailUrl,
-    script: ctx.script,
     description: ctx.description,
     tags: ctx.tags,
     // Instagram
@@ -32,7 +36,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ typ
     // Blog
     blogUrl: ctx.blogUrl ?? ctx.pendingUrl,
     excerpt: ctx.excerpt,
-    // Notes
-    notes: ctx.notes,
   })
 }

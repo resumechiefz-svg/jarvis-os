@@ -30,6 +30,7 @@ const PUBLIC_ROUTES = [
   '/api/webhooks/slack', // Slack events — verified by signing secret internally
   '/review',            // Content review screen — public so it can be opened directly
   '/api/review',        // Review API endpoints
+  '/api/video',         // Video file streaming for review screen
 ]
 
 // Security headers applied to every response

@@ -141,65 +141,36 @@ export default function ReviewPage() {
           {item.channel.toUpperCase()} · {type.toUpperCase()}
         </div>
 
-        {/* ── YouTube video player ── */}
+        {/* ── YouTube video player — just the video, nothing else ── */}
         {type === 'youtube' && (
           <div style={{ marginBottom: 32 }}>
             {item.videoUrl ? (
-              <div style={{ position: 'relative', paddingBottom: '56.25%', background: '#000', border: `1px solid ${cyan}20` }}>
+              <div style={{
+                background: '#000',
+                border: `1px solid ${cyan}20`,
+                boxShadow: `0 0 40px ${cyan}08`,
+              }}>
                 <video
                   src={item.videoUrl}
                   controls
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                  style={{ width: '100%', display: 'block', maxHeight: '70vh' }}
                   poster={item.thumbnailUrl}
                 />
               </div>
             ) : (
               <div style={{
-                padding: '48px 24px', border: `1px solid ${cyan}15`,
-                background: 'rgba(0,212,255,0.03)', textAlign: 'center',
+                padding: '80px 24px',
+                border: `1px solid ${cyan}15`,
+                background: 'rgba(0,212,255,0.02)',
+                textAlign: 'center',
               }}>
-                <div style={{ fontSize: 11, color: `${cyan}40`, letterSpacing: '0.2em', marginBottom: 8 }}>VIDEO RENDERING</div>
-                <div style={{ fontSize: 10, color: `${cyan}25` }}>
-                  The video is still processing. Check back in a few minutes or approve the script to trigger rendering.
+                <div style={{ fontSize: 32, marginBottom: 16 }}>⏳</div>
+                <div style={{ fontSize: 11, color: `${cyan}50`, letterSpacing: '0.2em', marginBottom: 8 }}>
+                  VIDEO STILL RENDERING
                 </div>
-              </div>
-            )}
-
-            {/* Script preview (collapsed) */}
-            <details style={{ marginTop: 16 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 10, color: `${cyan}50`, letterSpacing: '0.15em', padding: '8px 0' }}>
-                VIEW SCRIPT ▾
-              </summary>
-              <div style={{
-                marginTop: 8, padding: 16,
-                background: 'rgba(255,255,255,0.02)',
-                border: `1px solid ${cyan}10`,
-                fontSize: 12, lineHeight: 1.8, color: 'rgba(255,255,255,0.6)',
-                whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
-              }}>
-                {item.script}
-              </div>
-            </details>
-
-            {/* Description */}
-            {item.description && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 9, color: `${cyan}40`, letterSpacing: '0.2em', marginBottom: 8 }}>DESCRIPTION</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>{item.description}</div>
-              </div>
-            )}
-
-            {/* Tags */}
-            {item.tags && item.tags.length > 0 && (
-              <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {item.tags.map(tag => (
-                  <span key={tag} style={{
-                    padding: '2px 8px', fontSize: 9, letterSpacing: '0.1em',
-                    background: `${cyan}10`, border: `1px solid ${cyan}20`, color: `${cyan}70`,
-                  }}>
-                    #{tag}
-                  </span>
-                ))}
+                <div style={{ fontSize: 10, color: `${cyan}25` }}>
+                  Check back in a few minutes. This page will have the video when it's ready.
+                </div>
               </div>
             )}
           </div>

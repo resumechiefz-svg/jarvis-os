@@ -595,7 +595,43 @@ export async function assembleVideo(pkg: VideoPackage): Promise<string> {
   await saveVideoPackage(pkg)
 
   const sizeKB = Math.round(fs.statSync(outputPath).size / 1024)
-  await slack(`🎉 *[${pkg.title}]* Video assembled — ${sizeKB}KB\n\nFile: \`${outputPath}\`\n\nReact ✅ to upload to YouTube, or ✏️ to request changes.`)
+
+  // Save review record to Supabase
+  const { data: reviewRecord } = await supabaseAdmin.from('ai_memories').insert({
+    category: 'youtube_review',
+    content: pkg.title,
+    context: JSON.stringify({
+      channel: pkg.channel,
+      status: 'pending',
+      videoPath: outputPath,
+      script: pkg.scenes.map(s => s.narration).join('\n\n'),
+      description: pkg.description,
+      tags: pkg.tags,
+      buildDir: pkg.buildDir,
+      pipelineId: pkg.id,
+    }),
+    importance: 8,
+    created_at: new Date().toISOString(),
+  }).select('id').single()
+
+  const reviewId = reviewRecord?.id ?? pkg.id
+  const reviewUrl = `http://localhost:3001/review/youtube/${reviewId}`
+  const mobileUrl = `https://jarvis-os-dusky.vercel.app/review/youtube/${reviewId}`
+
+  // Slack notification — final product ready
+  await slack(`🎬 *Video Ready — ${pkg.channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}*
+
+*"${pkg.title}"*
+${sizeKB}KB · ready to watch
+
+Review on Mac: ${reviewUrl}
+Review on phone: ${mobileUrl}`)
+
+  // Auto-open Chrome on Mac to review screen
+  try {
+    const { exec } = await import('child_process')
+    exec(`open -a "Google Chrome" "${reviewUrl}"`)
+  } catch { /* non-fatal */ }
 
   return outputPath
 }
@@ -663,18 +699,26 @@ export async function runFullPipeline(
   theme?: string
 ): Promise<void> {
   try {
-    await slack(`🎬 *Starting YouTube Pipeline — ${channel}*\nTopic: ${topic ?? 'agent decides'} | Theme: ${theme ?? 'cinematic'}`)
+    // Auto-pick a fresh viral topic if none provided
+    let finalTopic = topic
+    if (!finalTopic) {
+      try {
+        const { pickFreshTopic } = await import('./content-intel')
+        finalTopic = await pickFreshTopic(channel, 'youtube')
+      } catch { /* use pipeline's own topic selection */ }
+    }
 
-    let pkg = await generateScript(channel, topic, theme)
-    await slack(`📝 *Script ready: "${pkg.title}"* (${pkg.scenes.length} scenes)`)
+    await slack(`🎬 *YouTube Pipeline Starting — ${channel === 'cardchiefz' ? 'Card Chiefz' : 'ResumeChiefz'}*\nPicking topic and writing script...`)
+
+    let pkg = await generateScript(channel, finalTopic, theme)
 
     pkg = await generateImages(pkg)
     pkg = await generateVoiceover(pkg)
     pkg = await animateScenes(pkg)
-    await assembleVideo(pkg)
+    await assembleVideo(pkg)  // ← sends notification + opens Chrome when done
 
   } catch (err) {
-    await slack(`❌ *Pipeline failed:* ${err instanceof Error ? err.message : String(err)}`)
+    await slack(`❌ *YouTube pipeline failed:* ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
