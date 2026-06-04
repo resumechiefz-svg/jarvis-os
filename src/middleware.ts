@@ -27,6 +27,7 @@ const PUBLIC_ROUTES = [
   '/api/strava/callback',
   '/api/watch',        // internally checks x-watch-key
   '/api/strava/health', // internally checks x-health-key
+  '/api/weather',        // Weather — called from blog/review pages
   '/api/webhooks/slack', // Slack events — verified by signing secret internally
   '/api/rc/subscribe',  // Blog email capture — public
   '/api/rc/checkout',   // Stripe checkout redirect — public
